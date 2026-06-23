@@ -5,6 +5,14 @@ import sys
 import os
 import streamlit as st
 
+import time
+
+start_time = time.time()
+
+print("=" * 60)
+print("BHL NER Dashboard - Starting up...")
+print("=" * 60)
+
 project_root = os.path.dirname(os.path.abspath(__file__))
 
 if project_root not in sys.path:
@@ -23,6 +31,21 @@ if "processed_text" not in st.session_state:
     st.session_state.processed_text = ""
 if "entities" not in st.session_state:
     st.session_state.entities = []
+
+# After NER processor loads, print the time taken
+if "ner_processor" not in st.session_state:
+    print("Creating NER processor...")
+    load_start = time.time()
+    st.session_state.ner_processor = NERProcessor()
+    load_end = time.time()
+    print(f"✓ NER processor loaded in {load_end - load_start:.2f} seconds")
+else:
+    print("✓ NER processor already loaded from session state")
+
+# Print total startup time
+end_time = time.time()
+print(f"✓ Total startup time: {end_time - start_time:.2f} seconds")
+print("=" * 60)
 
 
 # Page configuration
@@ -160,21 +183,6 @@ elif has_page_id:
 
 st.divider()
 
-# ============================================================================
-# PLACEHOLDER FOR RESULTS (Week 6)
-# ============================================================================
-
-st.subheader("📊 NER Results (Coming in Week 5-6)")
-st.info("💡 This area will display extracted entities, highlights, and charts once the backend is connected.")
-
-# Show a preview of what will appear later
-st.code("""
-Entities found:
-  Ailuropoda melanoleuca -> SPECIES (score: 0.94)
-  China -> LOCATION (score: 0.76)
-  Armand David -> PERSON (score: 0.85)
-  1869 -> DATE (score: 0.92)
-""", language="text")
 
 # ============================================================================
 # FOOTER
