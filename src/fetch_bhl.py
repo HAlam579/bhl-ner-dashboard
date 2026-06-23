@@ -62,9 +62,71 @@ def test_api_connection():
         print(f"✗ Unexpected error: {e}")
 
 
+# def get_page_text(page_id):
+#     """
+#     Fetch the text content of a specific page with robust error handling.
+    
+#     Args:
+#         page_id (int): The ID of the page to fetch
+        
+#     Returns:
+#         str: The text content, or None if error
+#     """
+#     params = {
+#         "op": "GetPageMetadata",
+#         "pageid": page_id,
+#         "ocr": "true",
+#         "names": "true",
+#         "apikey": API_KEY,
+#         "format": "json"
+#     }
+    
+#     try:
+#         print(f"Fetching page {page_id}...")
+#         response = requests.get(BASE_URL, params=params, timeout=30)
+        
+#         if response.status_code == 200:
+#             try:
+#                 data = response.json()
+#                 if data.get("Status") == "ok":
+#                     result = data.get("Result", {})
+                    
+#                     # Try to get text from various fields
+#                     if isinstance(result, dict):
+#                         text = result.get("Text")
+#                         if text:
+#                             return text
+#                         text = result.get("PageText")
+#                         if text:
+#                             return text
+                    
+#                     # If no text found, return None
+#                     print(f"Warning: No text found for page {page_id}")
+#                     return None
+#                 else:
+#                     print(f"API Error: {data.get('ErrorMessage', 'Unknown')}")
+#                     return None
+#             except json.JSONDecodeError as e:
+#                 print(f"Error: The API returned invalid JSON: {e}")
+#                 return None
+#         else:
+#             print(f"HTTP Error: {response.status_code}")
+#             return None
+            
+#     except requests.exceptions.Timeout:
+#         print(f"Error: Request timed out for page {page_id}")
+#         return None
+#     except requests.exceptions.ConnectionError:
+#         print(f"Error: Connection error for page {page_id}")
+#         print("  Please check your internet connection.")
+#         return None
+#     except Exception as e:
+#         print(f"Error: Unexpected error fetching page {page_id}: {e}")
+#         return None
+
 def get_page_text(page_id):
     """
-    Fetch the text content of a specific page with robust error handling.
+    Fetch the text content of a specific page using BHL API v3.
     
     Args:
         page_id (int): The ID of the page to fetch
@@ -73,8 +135,9 @@ def get_page_text(page_id):
         str: The text content, or None if error
     """
     params = {
-        "op": "GetPageText",
-        "id": page_id,
+        "op": "GetPageMetadata",
+        "pageid": page_id,
+        "ocr": "true",
         "apikey": API_KEY,
         "format": "json"
     }
@@ -84,28 +147,47 @@ def get_page_text(page_id):
         response = requests.get(BASE_URL, params=params, timeout=30)
         
         if response.status_code == 200:
-            try:
-                data = response.json()
-                if data.get("Status") == "ok":
-                    result = data.get("Result", {})
-                    
-                    # Try to get text from various fields
-                    if isinstance(result, dict):
-                        text = result.get("Text")
+            data = response.json()
+            if data.get("Status") == "ok":
+                result = data.get("Result", {})
+                
+                # Handle both dict and list responses
+                if isinstance(result, list):
+                    print(f"  Result is a list with {len(result)} items")
+                    if result:
+                        result = result[0]  # Take the first item
+                    else:
+                        print("  Result list is empty")
+                        return None
+                
+                # Now result should be a dict
+                if isinstance(result, dict):
+                    # The OCR text could be in different fields
+                    # Try Page.OcrText first
+                    page = result.get("Page", {})
+                    if isinstance(page, dict):
+                        text = page.get("OcrText")
                         if text:
                             return text
-                        text = result.get("PageText")
-                        if text:
-                            return text
                     
-                    # If no text found, return None
+                    # Try direct OcrText field
+                    text = result.get("OcrText")
+                    if text:
+                        return text
+                    
+                    # Try Text field
+                    text = result.get("Text")
+                    if text:
+                        return text
+                    
                     print(f"Warning: No text found for page {page_id}")
+                    print(f"  Available keys: {list(result.keys())}")
                     return None
                 else:
-                    print(f"API Error: {data.get('ErrorMessage', 'Unknown')}")
+                    print(f"Warning: Unexpected Result format: {type(result)}")
                     return None
-            except json.JSONDecodeError as e:
-                print(f"Error: The API returned invalid JSON: {e}")
+            else:
+                print(f"API Error: {data.get('ErrorMessage', 'Unknown')}")
                 return None
         else:
             print(f"HTTP Error: {response.status_code}")
@@ -116,12 +198,10 @@ def get_page_text(page_id):
         return None
     except requests.exceptions.ConnectionError:
         print(f"Error: Connection error for page {page_id}")
-        print("  Please check your internet connection.")
         return None
     except Exception as e:
         print(f"Error: Unexpected error fetching page {page_id}: {e}")
         return None
-
 
 def search_publications(search_term, limit=5, retries=2):
     """
@@ -186,6 +266,40 @@ def search_publications(search_term, limit=5, retries=2):
     return []
 
 
+# def get_item_metadata(item_id):
+#     """
+#     Get metadata for an item with error handling.
+    
+#     Args:
+#         item_id (int): Item ID
+        
+#     Returns:
+#         dict: Item metadata, or None if error
+#     """
+#     params = {
+#         "op": "GetItemMetadata",
+#         "id": item_id,
+#         "apikey": API_KEY,
+#         "format": "json"
+#     }
+    
+#     try:
+#         response = requests.get(BASE_URL, params=params, timeout=30)
+#         if response.status_code == 200:
+#             data = response.json()
+#             if data.get("Status") == "ok":
+#                 return data.get("Result", {})
+#             else:
+#                 print(f"API Error: {data.get('ErrorMessage', 'Unknown')}")
+#                 return None
+#         else:
+#             print(f"HTTP Error: {response.status_code}")
+#             return None
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         return None
+
+
 def get_item_metadata(item_id):
     """
     Get metadata for an item with error handling.
@@ -208,7 +322,17 @@ def get_item_metadata(item_id):
         if response.status_code == 200:
             data = response.json()
             if data.get("Status") == "ok":
-                return data.get("Result", {})
+                result = data.get("Result")
+                
+                # Handle both cases: Result can be a dict or a list
+                if isinstance(result, dict):
+                    return result
+                elif isinstance(result, list) and result:
+                    # If it's a list, return the first item
+                    return result[0]
+                else:
+                    print(f"Unexpected Result format: {type(result)}")
+                    return None
             else:
                 print(f"API Error: {data.get('ErrorMessage', 'Unknown')}")
                 return None
@@ -219,10 +343,46 @@ def get_item_metadata(item_id):
         print(f"Error: {e}")
         return None
 
+# def get_first_page_id_from_search(search_term):
+#     """
+#     Search for a term and get the first page ID with error handling.
+    
+#     Args:
+#         search_term (str): Search term
+        
+#     Returns:
+#         int: Page ID or None
+#     """
+#     results = search_publications(search_term, limit=1)
+#     if not results:
+#         return None
+    
+#     item_id = results[0].get("ItemID")
+#     if not item_id:
+#         print("No ItemID found in search results.")
+#         return None
+    
+#     metadata = get_item_metadata(item_id)
+#     if not metadata:
+#         return None
+    
+#     pages = metadata.get("Pages", [])
+#     if not pages:
+#         print("No pages found for this item.")
+#         return None
+    
+#     first_page = pages[0]
+#     page_id = first_page.get("PageID")
+#     if page_id:
+#         print(f"Found first page ID: {page_id}")
+#         return page_id
+#     else:
+#         print("No PageID found.")
+#         return None
 
 def get_first_page_id_from_search(search_term):
     """
-    Search for a term and get the first page ID with error handling.
+    Search for a term and get the first page ID.
     
     Args:
         search_term (str): Search term
@@ -234,29 +394,34 @@ def get_first_page_id_from_search(search_term):
     if not results:
         return None
     
-    item_id = results[0].get("ItemID")
+    item = results[0]
+    
+    # Method 1: Get ThumbnailPageID directly from search results
+    page_id = item.get("ThumbnailPageID")
+    if page_id:
+        print(f"Found first page ID from search: {page_id}")
+        return page_id
+    
+    # Method 2: If not in search results, try item metadata
+    item_id = item.get("ItemID")
     if not item_id:
         print("No ItemID found in search results.")
         return None
     
     metadata = get_item_metadata(item_id)
-    if not metadata:
-        return None
+    if metadata:
+        # If metadata is a list, get the first item
+        if isinstance(metadata, list) and metadata:
+            metadata = metadata[0]
+        
+        # Try to get ThumbnailPageID from metadata
+        page_id = metadata.get("ThumbnailPageID")
+        if page_id:
+            print(f"Found first page ID from metadata: {page_id}")
+            return page_id
     
-    pages = metadata.get("Pages", [])
-    if not pages:
-        print("No pages found for this item.")
-        return None
-    
-    first_page = pages[0]
-    page_id = first_page.get("PageID")
-    if page_id:
-        print(f"Found first page ID: {page_id}")
-        return page_id
-    else:
-        print("No PageID found.")
-        return None
-
+    print("No PageID found.")
+    return None
 
 if __name__ == "__main__":
     print("=" * 60)

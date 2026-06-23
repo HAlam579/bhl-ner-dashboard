@@ -17,7 +17,7 @@ class NERProcessor:
     
     def __init__(self):
         """
-        Initialize both NER models with error handling.
+        Initialise both NER models with error handling.
         
         If a model fails to load, the script will continue
         with the other model if possible.
