@@ -1,10 +1,11 @@
 """
 BHL NER Dashboard
+Week 5: Connected Backend to Dashboard
 """
+
 import sys
 import os
 import streamlit as st
-
 import time
 
 start_time = time.time()
@@ -18,21 +19,10 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
 from src.fetch_bhl import get_page_text, search_publications
 from src.ner_processor import NERProcessor
 
 # Initialise the NER processor once (models load once, not every button click)
-if "ner_processor" not in st.session_state:
-    st.session_state.ner_processor = NERProcessor()
-
-# Initialise storage for processed text and entities
-if "processed_text" not in st.session_state:
-    st.session_state.processed_text = ""
-if "entities" not in st.session_state:
-    st.session_state.entities = []
-
-# After NER processor loads, print the time taken
 if "ner_processor" not in st.session_state:
     print("Creating NER processor...")
     load_start = time.time()
@@ -42,11 +32,20 @@ if "ner_processor" not in st.session_state:
 else:
     print("✓ NER processor already loaded from session state")
 
+# Initialise storage for processed text and entities
+if "processed_text" not in st.session_state:
+    st.session_state.processed_text = ""
+if "entities" not in st.session_state:
+    st.session_state.entities = []
+if "counts" not in st.session_state:
+    st.session_state.counts = {}
+if "source" not in st.session_state:
+    st.session_state.source = ""
+
 # Print total startup time
 end_time = time.time()
 print(f"✓ Total startup time: {end_time - start_time:.2f} seconds")
 print("=" * 60)
-
 
 # Page configuration
 st.set_page_config(
@@ -54,11 +53,6 @@ st.set_page_config(
     page_icon="🌿",
     layout="wide"
 )
-
-if "fetch_clicked" not in st.session_state:
-    st.session_state.fetch_clicked = False
-if "page_id_value" not in st.session_state:
-    st.session_state.page_id_value = ""
 
 # ============================================================================
 # HEADER
@@ -83,10 +77,6 @@ st.divider()
 
 st.subheader("📝 Input")
 
-# Initialise variables to store input
-page_id = ""
-pasted_text = ""
-
 # Create two columns for the two input methods
 col1, col2 = st.columns(2)
 
@@ -95,29 +85,27 @@ with col1:
     st.write("**Option 1: Fetch from BHL**")
     page_id = st.text_input(
         "Enter a BHL Page ID:",
-        placeholder="e.g., 53548146",
+        placeholder="e.g., 54850898",
         help="Find a Page ID by opening a page on biodiversitylibrary.org and copying the number from the URL",
         key="page_id_input"
     )
     
     fetch_button = st.button("Fetch from BHL", use_container_width=True, key="fetch_button")
     
-    # NEW: Store whether the button was clicked
-    if fetch_button:
-        st.session_state.fetch_clicked = True
-        st.session_state.page_id_value = page_id
-    elif not page_id.strip():
-        st.session_state.fetch_clicked = False
-    
-    # NEW: Show message if button was clicked OR if Page ID is entered and we're showing the display
     if fetch_button:
         if page_id.strip():
-            st.info(f"⏳ Fetching BHL page {page_id}... (Coming in Week 5)")
+            with st.spinner(f"📡 Fetching BHL page {page_id}..."):
+                text = get_page_text(page_id)
+                if text:
+                    st.session_state.processed_text = text
+                    st.session_state.entities = []
+                    st.session_state.counts = {}
+                    st.session_state.source = f"BHL Page {page_id}"
+                    st.success(f"✅ Successfully fetched {len(text)} characters from page {page_id}!")
+                else:
+                    st.error(f"❌ Failed to fetch text from page {page_id}. Please check the Page ID.")
         else:
             st.warning("⚠️ Please enter a Page ID.")
-    elif page_id.strip():
-        # Optional: Show a subtle hint that Enter was pressed
-        pass
 
 # --- Column 2: Paste Text ---
 with col2:
@@ -133,7 +121,16 @@ with col2:
     
     if process_button:
         if pasted_text.strip():
-            st.info(f"⏳ Processing {len(pasted_text)} characters... (Coming in Week 5)")
+            with st.spinner(f"🧠 Processing {len(pasted_text)} characters..."):
+                processor = st.session_state.ner_processor
+                results = processor.process_text(pasted_text)
+                
+                st.session_state.processed_text = pasted_text
+                st.session_state.entities = results["entities"]
+                st.session_state.counts = results["counts"]
+                st.session_state.source = "Pasted text"
+                
+                st.success(f"✅ Found {results['total']} entities in {len(pasted_text)} characters!")
         else:
             st.warning("⚠️ Please paste some text.")
 
@@ -145,21 +142,13 @@ st.divider()
 
 st.subheader("📄 Original Text")
 
-# Determine which text to display
-# Priority: If user pasted text, show that. If user entered a Page ID, show that.
-display_text = None
-source = None
+# Get the stored text and source from session state
+stored_text = st.session_state.get("processed_text", "")
+stored_source = st.session_state.get("source", "Waiting for input...")
 
-# Check what the user has entered
-has_pasted_text = pasted_text and pasted_text.strip()
-has_page_id = page_id and page_id.strip()
-
-if has_pasted_text:
-    display_text = pasted_text
-    source = "Pasted text"
-elif has_page_id:
-    display_text = f"Text from BHL Page ID: {page_id}\n\n(Your fetched text will appear here when connected in Week 5)"
-    source = f"BHL Page {page_id}"
+if stored_text:
+    display_text = stored_text
+    source = stored_source
 else:
     display_text = "Enter a Page ID or paste some text above. The text will appear here."
     source = "Waiting for input..."
@@ -174,15 +163,33 @@ st.text_area(
 )
 
 # Show character count if there is actual text
-if has_pasted_text:
-    char_count = len(display_text)
-    st.caption(f"📊 Character count: {char_count}")
-elif has_page_id:
-    char_count = len(display_text)
+if stored_text:
+    char_count = len(stored_text)
     st.caption(f"📊 Character count: {char_count}")
 
 st.divider()
 
+# ============================================================================
+# ENTITIES DISPLAY (Task 3 will add highlighting)
+# ============================================================================
+
+st.subheader("🔍 Extracted Entities")
+
+entities = st.session_state.get("entities", [])
+counts = st.session_state.get("counts", {})
+
+if entities:
+    st.write("**Entity type counts:**")
+    for label, count in counts.items():
+        st.write(f"  - {label}: {count}")
+    
+    st.write("**List of entities found:**")
+    for entity in entities:
+        source_info = f" ({entity.get('source', 'N/A')})" if entity.get('source') else ""
+        score_info = f" - score: {entity.get('score', 'N/A'):.2f}" if entity.get('score') else ""
+        st.write(f"  - {entity['text']} -> {entity['label']}{source_info}{score_info}")
+else:
+    st.info("💡 No entities found yet. Paste text or fetch a BHL page and click a button above.")
 
 # ============================================================================
 # FOOTER
