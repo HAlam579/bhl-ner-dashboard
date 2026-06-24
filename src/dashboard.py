@@ -6,6 +6,7 @@ Week 5: Connected Backend to Dashboard
 import sys
 import os
 import streamlit as st
+import pandas as pd
 import time
 
 start_time = time.time()
@@ -13,6 +14,82 @@ start_time = time.time()
 print("=" * 60)
 print("BHL NER Dashboard - Starting up...")
 print("=" * 60)
+
+# ============================================================================
+# HIGHLIGHTING FUNCTION
+# ============================================================================
+
+def highlight_entities(text, entities):
+    """
+    Highlight entities in text with background colours.
+    
+    Args:
+        text (str): The original text
+        entities (list): List of entities with 'text' and 'label'
+    
+    Returns:
+        str: HTML string with highlighted entities
+    """
+    # If no entities, return the text as plain
+    if not entities or len(entities) == 0:
+        return text
+    
+    # Define colours for different entity types
+    colours = {
+        "SPECIES": "#90EE90",      # Light green
+        "GPE": "#87CEEB",          # Light blue
+        "LOCATION": "#87CEEB",     # Light blue
+        "DATE": "#FFD700",         # Gold
+        "PERSON": "#FFB6C1",       # Light pink
+        "ORG": "#DDA0DD",          # Plum
+        "HABITAT": "#98FB98",      # Pale green
+        "ORGANISM": "#AFEEEE",     # Pale turquoise
+        "TAXON": "#90EE90",        # Light green
+    }
+    default_colour = "#FFFF00"     # Yellow
+    
+    # Sort entities by length (longest first) to handle overlapping
+    sorted_entities = sorted(entities, key=lambda x: len(x["text"]), reverse=True)
+    
+    # Create a list of replacements to apply
+    replacements = []
+    
+    for entity in sorted_entities:
+        entity_text = entity["text"]
+        label = entity["label"]
+        
+        # Skip very short entities (less than 2 characters)
+        if len(entity_text) < 2:
+            continue
+        
+        colour = colours.get(label, default_colour)
+        
+        # Find the entity in the text (case insensitive)
+        start_idx = text.lower().find(entity_text.lower())
+        if start_idx != -1:
+            end_idx = start_idx + len(entity_text)
+            
+            # Check if this position overlaps with an existing replacement
+            overlap = False
+            for existing_start, existing_end, _ in replacements:
+                if not (end_idx <= existing_start or start_idx >= existing_end):
+                    overlap = True
+                    break
+            
+            if not overlap:
+                # Create the HTML span
+                html_span = f'<span style="background-color: {colour}; padding: 2px 4px; border-radius: 3px;" title="{label}">{entity_text}</span>'
+                replacements.append((start_idx, end_idx, html_span))
+    
+    # Sort replacements by start index (so we replace from the end)
+    replacements.sort(key=lambda x: x[0], reverse=True)
+    
+    # Apply replacements from end to start
+    highlighted_text = text
+    for start_idx, end_idx, html_span in replacements:
+        highlighted_text = highlighted_text[:start_idx] + html_span + highlighted_text[end_idx:]
+    
+    return highlighted_text
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,6 +130,27 @@ st.set_page_config(
     page_icon="🌿",
     layout="wide"
 )
+
+
+
+# ============================================================================
+# SIDEBAR: LEGEND (Always accessible from anywhere)
+# ============================================================================
+
+with st.sidebar:
+    st.subheader("🎨 Legend")
+    colours = {
+        "SPECIES": "#90EE90",
+        "GPE": "#89CFF0",
+        "LOCATION": "#00FFFF",
+        "DATE": "#FFD700",
+        "PERSON": "#FFB6C1",
+        "ORG": "#DDA0DD",
+        "HABITAT": "#D2A679",
+        "ORGANISM": "#AAFF00",
+    }
+    for label, colour in colours.items():
+        st.markdown(f'<span style="background-color: {colour}; padding: 2px 8px; border-radius: 3px;">{label}</span>', unsafe_allow_html=True)
 
 # ============================================================================
 # HEADER
@@ -97,13 +195,19 @@ with col1:
             with st.spinner(f"📡 Fetching BHL page {page_id}..."):
                 text = get_page_text(page_id)
                 if text:
+                    # Fetch the text
                     st.session_state.processed_text = text
-                    st.session_state.entities = []
-                    st.session_state.counts = {}
                     st.session_state.source = f"BHL Page {page_id}"
-                    st.success(f"✅ Successfully fetched {len(text)} characters from page {page_id}!")
+                    
+                    # Auto-process with NER
+                    processor = st.session_state.ner_processor
+                    results = processor.process_text(text)
+                    st.session_state.entities = results["entities"]
+                    st.session_state.counts = results["counts"]
+                    
+                    st.success(f"✅ Fetched {len(text)} characters and found {results['total']} entities!")
                 else:
-                    st.error(f"❌ Failed to fetch text from page {page_id}. Please check the Page ID.")
+                    st.error(f"❌ Failed to fetch text from page {page_id}.")
         else:
             st.warning("⚠️ Please enter a Page ID.")
 
@@ -134,62 +238,86 @@ with col2:
         else:
             st.warning("⚠️ Please paste some text.")
 
+# Clear BTN
+col_clear1, col_clear2, col_clear3 = st.columns([1, 1, 4])
+with col_clear1:
+    if st.button("🗑️ Clear All", use_container_width=True):
+        st.session_state.processed_text = ""
+        st.session_state.entities = []
+        st.session_state.counts = {}
+        st.session_state.source = ""
+        st.rerun()
+
 st.divider()
 
 # ============================================================================
-# TEXT DISPLAY SECTION
+# RESULTS SECTION
 # ============================================================================
 
-st.subheader("📄 Original Text")
-
-# Get the stored text and source from session state
+# Get the stored text and entities from session state
 stored_text = st.session_state.get("processed_text", "")
-stored_source = st.session_state.get("source", "Waiting for input...")
-
-if stored_text:
-    display_text = stored_text
-    source = stored_source
-else:
-    display_text = "Enter a Page ID or paste some text above. The text will appear here."
-    source = "Waiting for input..."
-
-# Display the text in a text box
-st.text_area(
-    label=f"**Source:** {source}",
-    value=display_text,
-    height=200,
-    disabled=True,
-    key="display_text_area"
-)
-
-# Show character count if there is actual text
-if stored_text:
-    char_count = len(stored_text)
-    st.caption(f"📊 Character count: {char_count}")
-
-st.divider()
-
-# ============================================================================
-# ENTITIES DISPLAY (Task 3 will add highlighting)
-# ============================================================================
-
-st.subheader("🔍 Extracted Entities")
-
 entities = st.session_state.get("entities", [])
 counts = st.session_state.get("counts", {})
 
-if entities:
-    st.write("**Entity type counts:**")
-    for label, count in counts.items():
-        st.write(f"  - {label}: {count}")
+if stored_text and entities:
     
-    st.write("**List of entities found:**")
-    for entity in entities:
-        source_info = f" ({entity.get('source', 'N/A')})" if entity.get('source') else ""
-        score_info = f" - score: {entity.get('score', 'N/A'):.2f}" if entity.get('score') else ""
-        st.write(f"  - {entity['text']} -> {entity['label']}{source_info}{score_info}")
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.subheader("🎨 Highlighted Text")
+        st.caption(f"Source: {st.session_state.get('source', 'Unknown')}")
+        st.caption(f"Character count: {len(stored_text)}")
+
+
+        # Legend
+        with st.popover("🎨 Legend"):
+            st.write("**Entity Type Colours:**")
+            colours = {
+                "SPECIES": "#90EE90",
+                "GPE": "#87CEEB",
+                "LOCATION": "#87CEEB",
+                "DATE": "#FFD700",
+                "PERSON": "#FFB6C1",
+                "ORG": "#DDA0DD",
+                "HABITAT": "#98FB98",
+                "ORGANISM": "#AFEEEE",
+            }
+            for label, colour in colours.items():
+                if any(e["label"] == label for e in entities):
+                    st.markdown(f'<span style="background-color: {colour}; padding: 2px 8px; border-radius: 3px;">{label}</span>', unsafe_allow_html=True)
+        
+        # Highlight the entities in the text
+        highlighted_html = highlight_entities(stored_text, entities)
+        
+        # Display the highlighted text
+        st.markdown(highlighted_html, unsafe_allow_html=True)
+
+    with col_right:
+        # Simplified entity list as a table
+        st.subheader("🔍 Extracted Entities")
+        
+        # Create a clean DataFrame
+        df_data = []
+        for entity in entities:
+            df_data.append({
+                "Entity": entity["text"],
+                "Type": entity["label"],
+                "Source": entity.get("source", "N/A"),
+            })
+        
+        # Remove duplicates
+        df = pd.DataFrame(df_data).drop_duplicates(subset=["Entity", "Type"])
+        
+        # Display as a table
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        # Show summary counts
+        st.write("**Summary:**")
+        for label, count in counts.items():
+            st.write(f"  - {label}: {count}")
+
 else:
-    st.info("💡 No entities found yet. Paste text or fetch a BHL page and click a button above.")
+    st.info("💡 No text processed yet. Paste text or fetch a BHL page using the buttons above.")
 
 # ============================================================================
 # FOOTER
