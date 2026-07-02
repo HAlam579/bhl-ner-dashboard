@@ -1,89 +1,64 @@
 """
 NER Processor for BHL Dashboard.
-Extracts entities using spaCy and GLiNER with error handling.
+Extracts entities using spaCy and GLiNER2 with error handling.
 """
 
 import spacy
-from gliner import GLiNER
+from gliner2 import GLiNER2
 from collections import Counter
-import sys
 import traceback
+
 
 class NERProcessor:
     """
-    Process text using spaCy and GLiNER.
-    Handles errors - script does not crash.
+    Process text using spaCy and GLiNER2.
+    Supports three modes: spacy_only, gliner2_only, and hybrid.
     """
-    
+
     def __init__(self):
-        """
-        Initialise both NER models with error handling.
-        
-        If a model fails to load, the script will continue
-        with the other model if possible.
-        """
+        """Initialize both NER models with error handling."""
         print("Loading NER models...")
-        
+
+        # Load spaCy
         self.nlp = None
         try:
             print("  Loading spaCy model...")
             self.nlp = spacy.load("en_core_web_sm")
             print("  ✓ spaCy model loaded successfully")
-        except OSError as e:
-            print(f"  ✗ Error loading spaCy model: {e}")
-            print("  Please install the model with: py -m spacy download en_core_web_sm")
         except Exception as e:
-            print(f"  ✗ Unexpected error loading spaCy: {e}")
+            print(f"  ✗ Error loading spaCy: {e}")
             print("  spaCy will be disabled for this session.")
-        
 
+        # Load GLiNER2
         self.gliner = None
         try:
-            print("  Loading GLiNER model...")
-            self.gliner = GLiNER.from_pretrained("urchade/gliner_mediumv2.1")
-            print("  ✓ GLiNER model loaded successfully")
+            print("  Loading GLiNER2 model...")
+            self.gliner = GLiNER2.from_pretrained("fastino/gliner2-base-v1")
+            print("  ✓ GLiNER2 model loaded successfully")
         except Exception as e:
-            print(f"  ✗ Error loading GLiNER model: {e}")
-            print("  GLiNER will be disabled for this session.")
-        
-        # Check if any models loaded successfully
+            print(f"  ✗ Error loading GLiNER2: {e}")
+            print("  GLiNER2 will be disabled for this session.")
+
+        # Report status
         if self.nlp is None and self.gliner is None:
-            print("\n⚠ WARNING: Neither spaCy nor GLiNER loaded successfully.")
-            print("The processor will not work. Please check your installation.")
+            print("\n⚠ WARNING: No models loaded. Processor will not work.")
         elif self.nlp is None:
-            print("\n⚠ WARNING: spaCy is disabled. Only GLiNER will be used.")
+            print("\n⚠ spaCy disabled. Only GLiNER2 will be used.")
         elif self.gliner is None:
-            print("\n⚠ WARNING: GLiNER is disabled. Only spaCy will be used.")
+            print("\n⚠ GLiNER2 disabled. Only spaCy will be used.")
         else:
             print("\n✓ Both models loaded successfully.")
-    
+
     def process_spacy(self, text):
-        """
-        Extract standard entities using spaCy with error handling.
-        
-        Args:
-            text (str): Input text
-            
-        Returns:
-            list: List of entities found, or empty list if error
-        """
-        # If spaCy is not available, return empty list
-        if self.nlp is None:
-            print("  spaCy is not available. Skipping.")
+        """Extract standard entities using spaCy."""
+        if self.nlp is None or not text:
             return []
-        
-        # If text is empty or invalid, return empty list
-        if not text or not isinstance(text, str):
-            print("  Invalid input text. Skipping spaCy.")
-            return []
-        
+
         try:
-            # Process the text with spaCy
             doc = self.nlp(text)
             entities = []
-            
             labels = ["PERSON", "GPE", "DATE", "ORG"]
-            
+
             for ent in doc.ents:
                 if ent.label_ in labels:
                     entities.append({
@@ -91,73 +66,70 @@ class NERProcessor:
                         "label": ent.label_,
                         "source": "spaCy"
                     })
-            
             return entities
-            
         except Exception as e:
-            # Catch any error during spaCy processing
             print(f"  ✗ Error during spaCy processing: {e}")
             return []
-    
-    def process_gliner(self, text):
-        """
-        Extract custom entities using GLiNER zero-shot with error handling.
-        
-        Args:
-            text (str): Input text
-            
-        Returns:
-            list: List of entities found, or empty list if error
-        """
-        # If GLiNER is not available, return empty list
-        if self.gliner is None:
-            print("  GLiNER is not available. Skipping.")
+
+    def process_gliner2(self, text):
+        """Extract custom entities using GLiNER2 zero-shot."""
+        if self.gliner is None or not text:
             return []
-        
-        # If text is empty or invalid, return empty list
-        if not text or not isinstance(text, str):
-            print("  Invalid input text. Skipping GLiNER.")
-            return []
-        
+
         try:
-            # Define the entity types to find
             labels = ["species", "habitat", "location", "date", "person", "organism"]
-            
-            predictions = self.gliner.predict_entities(
-                text, 
-                labels, 
-                threshold=0.3
-            )
+            predictions = self.gliner.extract_entities(text, labels, threshold=0.3)
             
             entities = []
-            for ent in predictions:
-                entities.append({
-                    "text": ent["text"],
-                    "label": ent["label"].upper(),
-                    "score": ent["score"],
-                    "source": "GLiNER"
-                })
+
+            # Handle the specific GLiNER2 output format
+            if isinstance(predictions, dict):
+                # Check if the output has an 'entities' key
+                if "entities" in predictions:
+                    entities_dict = predictions["entities"]
+                    # entities_dict is a dict with labels as keys and lists of strings as values
+                    for label, text_list in entities_dict.items():
+                        if text_list and isinstance(text_list, list):
+                            for entity_text in text_list:
+                                if entity_text:
+                                    entities.append({
+                                        "text": entity_text,
+                                        "label": label.upper(),
+                                        "score": 1.0,  # GLiNER2 doesn't provide scores in this format
+                                        "source": "GLiNER2"
+                                    })
+                else:
+                    # If the output is a dict directly with label keys
+                    for label, text_list in predictions.items():
+                        if isinstance(text_list, list):
+                            for entity_text in text_list:
+                                if entity_text:
+                                    entities.append({
+                                        "text": entity_text,
+                                        "label": label.upper(),
+                                        "score": 1.0,
+                                        "source": "GLiNER2"
+                                    })
             
+            print(f"  GLiNER2 found {len(entities)} entities")
             return entities
             
         except Exception as e:
-            # Catch any error during GLiNER processing
-            print(f"  ✗ Error during GLiNER processing: {e}")
+            print(f"  ✗ Error during GLiNER2 processing: {e}")
             return []
     
-    def process_text(self, text):
+    def process_text(self, text, method="hybrid"):
         """
-        Process text with both spaCy and GLiNER with full error handling.
-        
+        Process text with selected NER method.
+
         Args:
             text (str): Input text
-            
+            method (str): "spacy_only", "gliner2_only", or "hybrid"
+
         Returns:
-            dict: Combined results, or a safe empty result on critical error
+            dict: Combined results
         """
-        # Handle invalid input
         if not text or not isinstance(text, str):
-            print("✗ Error: Input text is empty or invalid.")
             return {
                 "entities": [],
                 "counts": {},
@@ -166,38 +138,40 @@ class NERProcessor:
                 "gliner_count": 0,
                 "error": "Invalid input"
             }
-        
+
         print("\n" + "=" * 60)
-        print("Processing Text")
+        print(f"Processing Text (Method: {method})")
         print("=" * 60)
         print(f"Text length: {len(text)} characters\n")
-        
-        # If neither model is available, return error
-        if self.nlp is None and self.gliner is None:
-            print("✗ Error: No NER models available.")
-            return {
-                "entities": [],
-                "counts": {},
-                "total": 0,
-                "spacy_count": 0,
-                "gliner_count": 0,
-                "error": "No models available"
-            }
-        
+
         try:
-            # Run both models 
-            print("Running spaCy...")
-            spacy_entities = self.process_spacy(text)
-            print(f"  spaCy found {len(spacy_entities)} entities")
+            spacy_entities = []
+            gliner_entities = []
+
+            # Normalize the method string to handle different formats
+            method_lower = method.lower().strip()
             
-            print("Running GLiNER...")
-            gliner_entities = self.process_gliner(text)
-            print(f"  GLiNER found {len(gliner_entities)} entities")
-            
-            # Combine and deduplicate
-            all_entities = spacy_entities + gliner_entities
-            
-            # Remove duplicates (same text + same label)
+            if method_lower == "spacy only" or method_lower == "spacy_only":
+                print("Running spaCy only...")
+                spacy_entities = self.process_spacy(text)
+                print(f"  spaCy found {len(spacy_entities)} entities")
+                all_entities = spacy_entities
+
+            elif method_lower == "gliner2 only" or method_lower == "gliner2_only":
+                print("Running GLiNER2 only...")
+                gliner_entities = self.process_gliner2(text)
+                print(f"  GLiNER2 found {len(gliner_entities)} entities")
+                all_entities = gliner_entities
+
+            else:  # hybrid (default)
+                print("Running spaCy + GLiNER2 hybrid...")
+                spacy_entities = self.process_spacy(text)
+                print(f"  spaCy found {len(spacy_entities)} entities")
+                gliner_entities = self.process_gliner2(text)
+                print(f"  GLiNER2 found {len(gliner_entities)} entities")
+                all_entities = spacy_entities + gliner_entities
+
+            # Deduplicate
             seen = set()
             unique_entities = []
             for ent in all_entities:
@@ -205,22 +179,20 @@ class NERProcessor:
                 if key not in seen:
                     seen.add(key)
                     unique_entities.append(ent)
-            
-            # Count entity types
+
             label_counts = Counter([ent["label"] for ent in unique_entities])
-            
+
             return {
                 "entities": unique_entities,
                 "counts": dict(label_counts),
                 "total": len(unique_entities),
                 "spacy_count": len(spacy_entities),
-                "gliner_count": len(gliner_entities)
+                "gliner_count": len(gliner_entities),
+                "method": method
             }
-            
         except Exception as e:
-            # Catch any unexpected error
-            print(f"✗ Unexpected error during processing: {e}")
-            print(traceback.format_exc())  # Shows where the error occurred
+            print(f"✗ Unexpected error: {e}")
+            print(traceback.format_exc())
             return {
                 "entities": [],
                 "counts": {},
@@ -229,96 +201,9 @@ class NERProcessor:
                 "gliner_count": 0,
                 "error": str(e)
             }
-    
-    def format_results(self, results):
-        """
-        Format results for display with error handling.
-        
-        Args:
-            results (dict): Results from process_text
-            
-        Returns:
-            str: Formatted output
-        """
-        # Check if there was an error
-        if results.get("error"):
-            output = []
-            output.append("\n" + "=" * 60)
-            output.append("ERROR")
-            output.append("=" * 60)
-            output.append(f"An error occurred: {results['error']}")
-            output.append("Please check your input and try again.")
-            return "\n".join(output)
-        
-        # If no entities were found
-        if results["total"] == 0:
-            output = []
-            output.append("\n" + "=" * 60)
-            output.append("EXTRACTED ENTITIES")
-            output.append("=" * 60)
-            output.append("\nNo entities found in the text.")
-            output.append("\n" + "=" * 60)
-            return "\n".join(output)
-        
-        # Normal output
-        output = []
-        output.append("\n" + "=" * 60)
-        output.append("EXTRACTED ENTITIES")
-        output.append("=" * 60)
-        
-        # Group by source
-        spacy_ents = [e for e in results["entities"] if e["source"] == "spaCy"]
-        gliner_ents = [e for e in results["entities"] if e["source"] == "GLiNER"]
-        
-        if spacy_ents:
-            output.append("\n[spaCy] Standard Entities:")
-            for e in spacy_ents:
-                output.append(f"  {e['text']} -> {e['label']}")
-        
-        if gliner_ents:
-            output.append("\n[GLiNER] Domain Entities:")
-            for e in gliner_ents:
-                output.append(f"  {e['text']} -> {e['label']} (score: {e['score']:.2f})")
-        
-        # Summary
-        output.append("\n" + "=" * 60)
-        output.append("SUMMARY")
-        output.append("=" * 60)
-        output.append(f"Total entities found: {results['total']}")
-        output.append(f"  spaCy: {results['spacy_count']}")
-        output.append(f"  GLiNER: {results['gliner_count']}")
-        
-        output.append("\nEntity type counts:")
-        for label, count in results["counts"].items():
-            output.append(f"  {label}: {count}")
-        
-        return "\n".join(output)
 
 
-# --- Test the Processor ---
 if __name__ == "__main__":
     print("-" * 60)
-    print("NER Processor Test (with Error Handling)")
+    print("NER Processor Test")
     print("-" * 60)
-
-    # Test 1: Normal text
-    print("\n--- Test 1: Normal text ---")
-    sample_text = """
-    The giant panda Ailuropoda melanoleuca is a bear native to China.
-    It was first described by French missionary Armand David in 1869.
-    """
-    
-    processor = NERProcessor()
-    results = processor.process_text(sample_text)
-    print(processor.format_results(results))
-
-    # Test 2: Empty text
-    print("\n--- Test 2: Empty text ---")
-    empty_results = processor.process_text("")
-    print(processor.format_results(empty_results))
-
-    # Test 3: Very long text (simulates potential processing issues)
-    print("\n--- Test 3: Long text ---")
-    long_text = " ".join(["The panda lives in China." for _ in range(100)])
-    long_results = processor.process_text(long_text)
-    print(processor.format_results(long_results))
