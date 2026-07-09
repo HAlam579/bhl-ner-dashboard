@@ -1,6 +1,0 @@
-Entity,Type,Source
-Ailuropoda melanoleuca,SPECIES,GLiNER2
-China,LOCATION,GLiNER2
-giant panda,SPECIES,GLiNER2
-Ailuropoda,PERSON,spaCy
-China,GPE,spaCy
