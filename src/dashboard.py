@@ -12,26 +12,23 @@ print("=" * 60)
 print("BHL NER Dashboard - Starting up...")
 print("=" * 60)
 
-# ============================================================================
-# HIGHLIGHTING FUNCTION
-# ============================================================================
+
+ENTITY_COLOURS = {
+    "SPECIES": "#90EE90",
+    "LOCATION": "#00FFFF",
+    "DATE": "#FFD700",
+    "PERSON": "#FFB6C1",
+    "ORGANIZATION": "#DDA0DD",
+    "HABITAT": "#D2A679",
+    "ORGANISM": "#AAFF00",
+}
+DEFAULT_COLOUR = "#FFFF00"
+
 
 def highlight_entities(text, entities):
     """Highlight entities in text with background colours."""
     if not entities or len(entities) == 0:
         return text
-    
-    colours = {
-        "SPECIES": "#90EE90",
-        "GPE": "#89CFF0",
-        "LOCATION": "#00FFFF",
-        "DATE": "#FFD700",
-        "PERSON": "#FFB6C1",
-        "ORG": "#DDA0DD",
-        "HABITAT": "#D2A679",
-        "ORGANISM": "#AAFF00",
-    }
-    default_colour = "#FFFF00"
     
     sorted_entities = sorted(entities, key=lambda x: len(x["text"]), reverse=True)
     replacements = []
@@ -43,7 +40,7 @@ def highlight_entities(text, entities):
         if len(entity_text) < 2:
             continue
         
-        colour = colours.get(label, default_colour)
+        colour = ENTITY_COLOURS.get(label, DEFAULT_COLOUR)
         start_idx = text.lower().find(entity_text.lower())
         
         if start_idx != -1:
@@ -67,9 +64,6 @@ def highlight_entities(text, entities):
     
     return highlighted_text
 
-# ============================================================================
-# SETUP
-# ============================================================================
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 
@@ -107,9 +101,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# ============================================================================
+
 # SIDEBAR
-# ============================================================================
 
 with st.sidebar:
     st.subheader("⚙️ Extraction Method")
@@ -123,25 +116,14 @@ with st.sidebar:
     st.divider()
 
     st.subheader("🎨 Legend")
-    colours = {
-        "SPECIES": "#90EE90",
-        "GPE": "#89CFF0",
-        "LOCATION": "#00FFFF",
-        "DATE": "#FFD700",
-        "PERSON": "#FFB6C1",
-        "ORG": "#DDA0DD",
-        "HABITAT": "#D2A679",
-        "ORGANISM": "#AAFF00",
-    }
-    for label, colour in colours.items():
+    for label, colour in ENTITY_COLOURS.items():
         st.markdown(
             f'<span style="background-color: {colour}; padding: 2px 8px; border-radius: 3px;">{label}</span>',
             unsafe_allow_html=True
         )
 
-# ============================================================================
+
 # HEADER
-# ============================================================================
 
 st.title("🌿 BHL NER Dashboard")
 st.markdown("""
@@ -156,9 +138,8 @@ Enter a BHL Page ID or paste text below to get started.
 
 st.divider()
 
-# ============================================================================
+
 # INPUT SECTION
-# ============================================================================
 
 st.subheader("📝 Input")
 
@@ -229,9 +210,8 @@ with col_clear1:
 
 st.divider()
 
-# ============================================================================
+
 # RESULTS SECTION
-# ============================================================================
 
 stored_text = st.session_state.get("processed_text", "")
 entities = st.session_state.get("entities", [])
@@ -239,7 +219,7 @@ counts = st.session_state.get("counts", {})
 
 if stored_text and entities:
     
-    # --- Highlighted Text (Full Width) ---
+
     st.subheader("🎨 Highlighted Text")
     st.caption(f"Source: {st.session_state.get('source', 'Unknown')}")
     st.caption(f"Character count: {len(stored_text)}")
@@ -249,35 +229,40 @@ if stored_text and entities:
     
     st.divider()
     
-    # --- Entities, Chart, Export ---
+
     st.subheader("🔍 Extracted Entities")
     
     # Entity Table
     df_data = []
     for entity in entities:
-        df_data.append({
+        row = {
             "Entity": entity["text"],
             "Type": entity["label"],
             "Source": entity.get("source", "N/A"),
-        })
-    
+            "Start": entity.get("start", "N/A"),
+            "End": entity.get("end", "N/A"),
+        }
+        # Only add Score if it exists
+        if "score" in entity:
+            row["Score"] = entity.get("score", "N/A")
+        df_data.append(row)
+
     df = pd.DataFrame(df_data).drop_duplicates(subset=["Entity", "Type"])
     st.dataframe(df, use_container_width=True, hide_index=True)
     
-    # Summary
+
     st.write("**Summary:**")
     
-    # Build HTML for all tags
     tags_html = ""
     for label, count in counts.items():
-        colour = colours.get(label, "#CCCCCC")
+        colour = ENTITY_COLOURS.get(label, DEFAULT_COLOUR)
         tags_html += f'<span style="background-color: {colour}; padding: 4px 12px; border-radius: 12px; font-weight: bold; display: inline-block; margin: 4px 4px;">{label}: {count}</span> '
-
+    
     st.markdown(tags_html, unsafe_allow_html=True)
     
     # Bar Chart
     st.subheader("📊 Entity Type Distribution")
-    
+
     if counts:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.bar(counts.keys(), counts.values(), color='#00897B')
@@ -289,7 +274,7 @@ if stored_text and entities:
         st.pyplot(fig)
     else:
         st.info("No data to display.")
-    
+
     # CSV Download
     st.write("**Download Results:**")
     
@@ -297,7 +282,7 @@ if stored_text and entities:
     csv_buffer = io.StringIO()
     df_export.to_csv(csv_buffer, index=False)
     csv_data = csv_buffer.getvalue()
-    
+
     st.download_button(
         label="⬇️ Download as CSV",
         data=csv_data,
@@ -309,9 +294,9 @@ if stored_text and entities:
 else:
     st.info("💡 No text processed yet. Paste text or fetch a BHL page using the buttons above.")
 
-# ============================================================================
+
+
 # FOOTER
-# ============================================================================
 
 st.divider()
 st.caption("🌿 BHL NER Dashboard | Built with Streamlit")

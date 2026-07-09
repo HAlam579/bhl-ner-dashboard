@@ -1,12 +1,32 @@
 """
 NER Processor for BHL Dashboard.
-Extracts entities using spaCy and GLiNER2 with error handling.
+Extracts entities using spaCy, GLiNER2 and other tools
 """
 
 import spacy
 from gliner2 import GLiNER2
 from collections import Counter
 import traceback
+
+
+LABEL_STANDARDISATION = {
+    "GPE": "LOCATION",
+    "LOC": "LOCATION",
+    
+    "ORG": "ORGANIZATION",
+    "PERSON": "PERSON",
+    "DATE": "DATE",
+    "SPECIES": "SPECIES",
+    "HABITAT": "HABITAT",
+    "ORGANISM": "ORGANISM",
+    "GENUS": "GENUS",
+    "FAMILY": "FAMILY",
+    "ORDER": "ORDER",
+}
+
+def standardise_label(label):
+    """Standardise entity labels for consistency across models."""
+    return LABEL_STANDARDISATION.get(label, label)
 
 
 class NERProcessor:
@@ -63,8 +83,10 @@ class NERProcessor:
                 if ent.label_ in labels:
                     entities.append({
                         "text": ent.text,
-                        "label": ent.label_,
-                        "source": "spaCy"
+                        "label": standardise_label(ent.label_),
+                        "source": "spaCy",
+                        "start": ent.start_char,
+                        "end": ent.end_char
                     })
             return entities
         except Exception as e:
@@ -79,45 +101,53 @@ class NERProcessor:
         try:
             labels = ["species", "habitat", "location", "date", "person", "organism"]
             predictions = self.gliner.extract_entities(text, labels, threshold=0.3)
-            
+
             entities = []
 
-            # Handle the specific GLiNER2 output format
-            if isinstance(predictions, dict):
-                # Check if the output has an 'entities' key
-                if "entities" in predictions:
-                    entities_dict = predictions["entities"]
-                    # entities_dict is a dict with labels as keys and lists of strings as values
-                    for label, text_list in entities_dict.items():
-                        if text_list and isinstance(text_list, list):
-                            for entity_text in text_list:
-                                if entity_text:
+            # Handle GLiNER2 output format
+            if isinstance(predictions, dict) and "entities" in predictions:
+                # Primary format: {"entities": {"species": ["text1", "text2"], ...}}
+                entities_dict = predictions["entities"]
+                for label, text_list in entities_dict.items():
+                    if text_list and isinstance(text_list, list):
+                        for entity_text in text_list:
+                            if entity_text:
+                                start_idx = text.lower().find(entity_text.lower())
+                                if start_idx != -1:
+                                    end_idx = start_idx + len(entity_text)
                                     entities.append({
                                         "text": entity_text,
-                                        "label": label.upper(),
-                                        "score": 1.0,  # GLiNER2 doesn't provide scores in this format
-                                        "source": "GLiNER2"
-                                    })
-                else:
-                    # If the output is a dict directly with label keys
-                    for label, text_list in predictions.items():
-                        if isinstance(text_list, list):
-                            for entity_text in text_list:
-                                if entity_text:
-                                    entities.append({
-                                        "text": entity_text,
-                                        "label": label.upper(),
+                                        "label": standardise_label(label.upper()),
                                         "score": 1.0,
-                                        "source": "GLiNER2"
+                                        "source": "GLiNER2",
+                                        "start": start_idx,
+                                        "end": end_idx
                                     })
-            
+            elif isinstance(predictions, dict):
+                # Fallback: direct label keys
+                for label, text_list in predictions.items():
+                    if isinstance(text_list, list):
+                        for entity_text in text_list:
+                            if entity_text:
+                                start_idx = text.lower().find(entity_text.lower())
+                                if start_idx != -1:
+                                    end_idx = start_idx + len(entity_text)
+                                    entities.append({
+                                        "text": entity_text,
+                                        "label": standardise_label(label.upper()),
+                                        "score": 1.0,
+                                        "source": "GLiNER2",
+                                        "start": start_idx,
+                                        "end": end_idx
+                                    })
+
             print(f"  GLiNER2 found {len(entities)} entities")
             return entities
-            
+
         except Exception as e:
             print(f"  ✗ Error during GLiNER2 processing: {e}")
             return []
-    
+
     def process_text(self, text, method="hybrid"):
         """
         Process text with selected NER method.
@@ -148,9 +178,8 @@ class NERProcessor:
             spacy_entities = []
             gliner_entities = []
 
-            # Normalize the method string to handle different formats
             method_lower = method.lower().strip()
-            
+
             if method_lower == "spacy only" or method_lower == "spacy_only":
                 print("Running spaCy only...")
                 spacy_entities = self.process_spacy(text)
