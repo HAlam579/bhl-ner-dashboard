@@ -69,6 +69,17 @@ class NERProcessor:
         else:
             print("\n✓ Both models loaded successfully.")
 
+    def normalise_text(self, text):
+        """Normalise text for consistent processing."""
+        if not text or not isinstance(text, str):
+            return ""
+        
+        text = " ".join(text.split())
+        text = text.replace("\n", " ")
+        text = text.replace("\r", " ")
+
+        return " ".join(text.split())
+    
     def process_spacy(self, text):
         """Extract standard entities using spaCy."""
         if self.nlp is None or not text:
@@ -152,6 +163,11 @@ class NERProcessor:
         """
         Process text with selected NER method.
 
+        Consistency rules applied:
+        1. Text normalisation
+        2. Label standardisation
+        3. Deduplication
+
         Args:
             text (str): Input text
             method (str): "spacy_only", "gliner2_only", or "hybrid"
@@ -159,6 +175,8 @@ class NERProcessor:
         Returns:
             dict: Combined results
         """
+        text = self.normalise_text(text)
+        
         if not text or not isinstance(text, str):
             return {
                 "entities": [],
