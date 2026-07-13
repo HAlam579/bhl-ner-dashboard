@@ -157,8 +157,8 @@ def display_model_loading_message(processor, extraction_method):
         st.info("💡 Models are loading... Subsequent requests will be faster.")
 
 
-def initialize_session_state():
-    """Initialize all session state variables."""
+def initialise_session_state():
+    """Initialise all session state variables."""
     defaults = {
         "processed_text": "",
         "entities": [],
@@ -166,6 +166,7 @@ def initialize_session_state():
         "source": "",
         "processing_times": [],
         "total_pages_processed": 0,
+        "clear_counter": 0
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -177,22 +178,64 @@ print("=" * 60)
 print("BHL NER Dashboard - Starting up...")
 print("=" * 60)
 
-initialize_session_state()
+initialise_session_state()
 
 if "ner_processor" not in st.session_state:
     print("Creating NER processor...")
-    load_start = time.time()
+    create_start = time.time()
     st.session_state.ner_processor = NERProcessor()
-    load_end = time.time()
-    load_time = load_end - load_start
-    print(f"✓ NER processor created in {load_time:.2f} seconds")
-    st.session_state.processor_load_time = load_time
+    create_end = time.time()
+    print(f"✓ NER processor created in {create_end - create_start:.2f} seconds")
+
+    with st.spinner("Loading NER models... This may take a moment."):
+        load_start = time.time()
+        processor = st.session_state.ner_processor
+
+        print("Loading spaCy model...")
+        processor.load_spacy()
+        print("Loading GLiNER2 model...")
+        processor.load_gliner2()
+        print("Loading GLiNER model...")
+        processor.load_gliner()
+        print("Loading GNfinder model...")
+        processor.load_gnfinder()
+
+        load_end = time.time()
+        load_time = load_end - load_start
+
+        st.session_state.processor_load_time = load_time # Store load time
+
+        st.success(f"✓ All models loaded in {load_time:.2f} seconds")
+        print(f"✓ All models loaded in {load_time:.2f} seconds")
+
+        loaded = []
+        if processor.models_loaded["spacy"]:
+            loaded.append("spaCy")
+        if processor.models_loaded["gliner2"]:
+            loaded.append("GLiNER2")
+        if processor.models_loaded["gliner"]:
+            loaded.append("GLiNER")
+        if processor.models_loaded["gnfinder"]:
+            loaded.append("GNfinder")
+        print(f"Models loaded: {', '.join(loaded)}")
+
+        # Small delay to ensure spinner message is visible
+        time.sleep(0.5)
+
 else:
     print("✓ NER processor already loaded from session state")
-
-end_time = time.time()
-print(f"✓ Total startup time: {end_time - start_time:.2f} seconds")
-print("=" * 60)
+    # If already loaded, show quick status
+    processor = st.session_state.ner_processor
+    loaded = []
+    if processor.models_loaded["spacy"]:
+        loaded.append("spaCy")
+    if processor.models_loaded["gliner2"]:
+        loaded.append("GLiNER2")
+    if processor.models_loaded["gliner"]:
+        loaded.append("GLiNER")
+    if processor.models_loaded["gnfinder"]:
+        loaded.append("GNfinder")
+    st.info(f"✅ Models ready: {', '.join(loaded)}")
 
 
 # Sidebar
@@ -303,10 +346,10 @@ with col1:
         "Enter a BHL Page ID:",
         placeholder="e.g., 54850898",
         help="Find a Page ID by opening a page on biodiversitylibrary.org",
-        key="page_id_input"
+        key=f"page_id_input_{st.session_state.get('clear_counter', 0)}"
     )
     
-    if st.button("Fetch from BHL", use_container_width=True, key="fetch_button"):
+    if st.button("Fetch from BHL", width='stretch', key="fetch_button"):
         if not page_id.strip():
             st.warning("⚠️ Please enter a Page ID.")
         else:
@@ -338,10 +381,10 @@ with col2:
         "Paste biodiversity text here:",
         height=150,
         placeholder="Paste any text containing species names, locations, or dates...",
-        key="pasted_text_input"
+        key=f"pasted_text_input_{st.session_state.get('clear_counter', 0)}"
     )
     
-    if st.button("Process Text", use_container_width=True, key="process_button"):
+    if st.button("Process Text", width='stretch', key="process_button"):
         if not pasted_text.strip():
             st.warning("⚠️ Please paste some text.")
         else:
@@ -360,12 +403,14 @@ with col2:
 
 col_clear1, col_clear2, col_clear3 = st.columns([1, 1, 4])
 with col_clear1:
-    if st.button("🗑️ Clear All", use_container_width=True):
+    if st.button("🗑️ Clear All", width='stretch'):
         for key in ["processed_text", "entities", "counts", "source", "processing_times"]:
             if key in st.session_state:
                 st.session_state[key] = [] if key in ["entities", "processing_times"] else {}
+        
         st.session_state.processed_text = ""
         st.session_state.total_pages_processed = 0
+        st.session_state.clear_counter += 1
         st.rerun()
 
 st.divider()
@@ -415,7 +460,7 @@ if stored_text and entities:
         df_data.append(row)
 
     df = pd.DataFrame(df_data).drop_duplicates(subset=["Entity", "Type"])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
     
     st.write("**Summary:**")
     tags_html = ""
@@ -449,7 +494,7 @@ if stored_text and entities:
         data=csv_data,
         file_name="bhl_ner_entities.csv",
         mime="text/csv",
-        use_container_width=True
+        width='stretch'
     )
 
 else:
