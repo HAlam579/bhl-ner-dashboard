@@ -1,141 +1,108 @@
 """
-Test the NER Processor on Multiple Texts.
-Tests the processor on 5 different sample texts covering various topics.
+Test the NER Processor on Multiple Texts with GNfinder.
 """
 
 import sys
 import os
 
-# Add the src folder to the path so we can import the processor
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from ner_processor import NERProcessor
 
 
-def run_test(processor, text, test_name):
-    """
-    Run a single test and print formatted results.
-    
-    Args:
-        processor: The NERProcessor instance
-        text (str): The text to process
-        test_name (str): Name of the test for display
-    """
+def run_test(processor, text, test_name, method="hybrid_gn"):
+    """Run a single test and print formatted results."""
     print("\n" + "=" * 70)
-    print(f"TEST: {test_name}")
+    print(f"TEST: {test_name} (Method: {method})")
     print("=" * 70)
     
-    # Show a preview of the text
     preview = text[:200].replace('\n', ' ')
     print(f"Text preview: {preview}...\n")
     
-    # Process the text
-    results = processor.process_text(text)
-    print(processor.format_results(results))
+    results = processor.process_text(text, method=method)
     
-    # Return summary for later
+    print(f"Found {results['total']} entities")
+    print(f"  spaCy: {results['spacy_count']}, GLiNER2: {results['gliner2_count']}, GLiNER: {results['gliner_count']}, GNfinder: {results['gnfinder_count']}")
+    
+    if results["entities"]:
+        print("\nEntities:")
+        for entity in results["entities"]:
+            score_info = f" (score: {entity.get('score', 'N/A'):.4f})" if entity.get('score') and isinstance(entity.get('score'), (int, float)) else ""
+            print(f"  - '{entity['text']}' -> {entity['label']} ({entity['source']}){score_info}")
+    
+    print(f"\nEntity counts by type: {results['counts']}")
+    
     return {
         "name": test_name,
         "total": results["total"],
         "spacy_count": results["spacy_count"],
+        "gliner2_count": results["gliner2_count"],
         "gliner_count": results["gliner_count"],
+        "gnfinder_count": results["gnfinder_count"],
         "counts": results["counts"]
     }
 
 
 def main():
-    """Run all tests."""
     print("=" * 70)
-    print("Testing NER Processor on Multiple Texts")
+    print("Testing NER Processor on Multiple Texts (With GNfinder)")
     print("=" * 70)
     
-    # Load the processor once (models load once, reused for all tests)
-    print("\nLoading NER models (this may take a moment)...")
+    print("\nLoading NER models...")
     processor = NERProcessor()
     
-    # -----------------------------------------------------------------
-    # Test 1: Panda / Scientific Name
-    # -----------------------------------------------------------------
-    text_1 = """
-    The giant panda Ailuropoda melanoleuca is a bear native to China.
-    It was first described by French missionary Armand David in 1869.
-    The panda lives in the mountains of Sichuan province.
-    Its habitat is threatened by deforestation.
-    """
+    texts = [
+        ("1: Panda", """
+        The giant panda Ailuropoda melanoleuca is a bear native to China.
+        It was first described by French missionary Armand David in 1869.
+        The panda lives in the mountains of Sichuan province.
+        Its habitat is threatened by deforestation.
+        """),
+        
+        ("2: Whale", """
+        The blue whale Balaenoptera musculus is the largest animal on Earth.
+        It can grow up to 30 metres in length and weigh over 150 tonnes.
+        Blue whales are found in all oceans except the Arctic.
+        """),
+        
+        ("3: Darwin", """
+        Charles Darwin published On the Origin of Species in 1859.
+        He visited the Galapagos Islands in 1835 on HMS Beagle.
+        """),
+        
+        ("4: Butterfly", """
+        The monarch butterfly Danaus plexippus is known for its migration.
+        It travels from North America to Mexico each winter.
+        """),
+        
+        ("5: Fungi", """
+        Amanita muscaria is a poisonous mushroom found in the UK.
+        It grows in forests with birch and pine trees.
+        """),
+    ]
     
-    # -----------------------------------------------------------------
-    # Test 2: Whale / Marine Biology
-    # -----------------------------------------------------------------
-    text_2 = """
-    The blue whale Balaenoptera musculus is the largest animal on Earth.
-    It can grow up to 30 metres in length and weigh over 150 tonnes.
-    Blue whales are found in all oceans except the Arctic.
-    They were hunted extensively in the 20th century.
-    """
-    
-    # -----------------------------------------------------------------
-    # Test 3: Darwin / Evolution / Historical Text
-    # -----------------------------------------------------------------
-    text_3 = """
-    Charles Darwin published On the Origin of Species in 1859.
-    He visited the Galapagos Islands in 1835 on HMS Beagle.
-    Darwin's observations of finches and tortoises influenced his theory.
-    The Galapagos Islands are part of Ecuador.
-    """
-    
-    # -----------------------------------------------------------------
-    # Test 4: Butterfly / Entomology
-    # -----------------------------------------------------------------
-    text_4 = """
-    The monarch butterfly Danaus plexippus is known for its migration.
-    It travels from North America to Mexico each winter.
-    The butterfly was first described by Carl Linnaeus in 1758.
-    Its habitat includes milkweed plants.
-    """
-    
-    # -----------------------------------------------------------------
-    # Test 5: Fungi / Mycology
-    # -----------------------------------------------------------------
-    text_5 = """
-    Amanita muscaria is a poisonous mushroom found in the UK.
-    It grows in forests with birch and pine trees.
-    The mushroom was historically used in religious rituals.
-    It contains the psychoactive compounds muscimol and ibotenic acid.
-    """
-    
-    # -----------------------------------------------------------------
-    # Run all tests
-    # -----------------------------------------------------------------
     results_summary = []
+    for name, text in texts:
+        results_summary.append(run_test(processor, text, name, "hybrid_gn"))
     
-    results_summary.append(run_test(processor, text_1, "1: Panda (Scientific Name)"))
-    results_summary.append(run_test(processor, text_2, "2: Whale (Marine Biology)"))
-    results_summary.append(run_test(processor, text_3, "3: Darwin (Evolution/Historical)"))
-    results_summary.append(run_test(processor, text_4, "4: Butterfly (Entomology)"))
-    results_summary.append(run_test(processor, text_5, "5: Fungi (Mycology)"))
-    
-    # -----------------------------------------------------------------
-    # Print overall summary
-    # -----------------------------------------------------------------
     print("\n" + "=" * 70)
     print("OVERALL SUMMARY")
     print("=" * 70)
-    print(f"{'Test Name':<30} {'Total':<8} {'spaCy':<8} {'GLiNER':<8}")
+    print(f"{'Test Name':<20} {'Total':<8} {'spaCy':<8} {'GLiNER2':<8} {'GLiNER':<8} {'GNfinder':<8}")
     print("-" * 70)
     
     for summary in results_summary:
-        print(f"{summary['name']:<30} {summary['total']:<8} {summary['spacy_count']:<8} {summary['gliner_count']:<8}")
+        print(f"{summary['name']:<20} {summary['total']:<8} {summary['spacy_count']:<8} {summary['gliner2_count']:<8} {summary['gliner_count']:<8} {summary['gnfinder_count']:<8}")
     
     print("-" * 70)
     
-    # Calculate averages
     avg_total = sum(s["total"] for s in results_summary) / len(results_summary)
     avg_spacy = sum(s["spacy_count"] for s in results_summary) / len(results_summary)
+    avg_gliner2 = sum(s["gliner2_count"] for s in results_summary) / len(results_summary)
     avg_gliner = sum(s["gliner_count"] for s in results_summary) / len(results_summary)
+    avg_gnfinder = sum(s["gnfinder_count"] for s in results_summary) / len(results_summary)
     
-    print(f"\n{'Average':<30} {avg_total:<8.1f} {avg_spacy:<8.1f} {avg_gliner:<8.1f}")
-    
-
+    print(f"\n{'Average':<20} {avg_total:<8.1f} {avg_spacy:<8.1f} {avg_gliner2:<8.1f} {avg_gliner:<8.1f} {avg_gnfinder:<8.1f}")
 
 
 if __name__ == "__main__":

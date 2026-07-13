@@ -1,5 +1,5 @@
 """
-Test script to verify all three extraction methods.
+Test script to verify all extraction methods including GLiNER.
 Run with: py tests/test_extraction_methods.py
 """
 
@@ -12,11 +12,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.ner_processor import NERProcessor
 
 print("=" * 60)
-print("Testing Extraction Methods")
+print("Testing All Extraction Methods")
 print("=" * 60)
 
-# Test text
-test_text = "The giant panda Ailuropoda melanoleuca is a bear native to China."
+# Test text with various entity types
+test_text = """The giant panda Ailuropoda melanoleuca is a bear native to China.
+It was first described by French missionary Armand David in 1869.
+The habitat includes bamboo forests in Sichuan province."""
 
 print(f"\nTest text: {test_text}")
 
@@ -24,38 +26,38 @@ print(f"\nTest text: {test_text}")
 print("\nLoading NER processor...")
 processor = NERProcessor()
 
-# Test 1: spaCy Only
-print("\n" + "=" * 60)
-print("TEST 1: spaCy Only")
-print("=" * 60)
-results_spacy = processor.process_text(test_text, method="spacy_only")
-print(f"Found {results_spacy['total']} entities")
-for entity in results_spacy["entities"]:
-    print(f"  - {entity['text']} -> {entity['label']} ({entity['source']})")
+# Test all methods
+methods = [
+    ("spacy_only", "spaCy Only"),
+    ("gliner2_only", "GLiNER2 Only"),
+    ("gliner_only", "GLiNER Only"),
+    ("gnfinder_only", "GNfinder Only"),
+    ("hybrid", "Hybrid (spaCy + GLiNER2)"),
+    ("hybrid_g", "Hybrid (spaCy + GLiNER)"),
+    ("hybrid_gn", "Hybrid (spaCy + GLiNER + GNfinder)"),
+]
 
-# Test 2: GLiNER2 Only
-print("\n" + "=" * 60)
-print("TEST 2: GLiNER2 Only")
-print("=" * 60)
-try:
-    results_gliner = processor.process_text(test_text, method="gliner2_only")
-    print(f"Found {results_gliner['total']} entities")
-    for entity in results_gliner["entities"]:
-        score_info = f" (score: {entity.get('score', 'N/A'):.2f})" if entity.get('score') else ""
-        print(f"  - {entity['text']} -> {entity['label']} ({entity['source']}){score_info}")
-except Exception as e:
-    print(f"Error in GLiNER2 extraction: {e}")
-
-# Test 3: Hybrid
-print("\n" + "=" * 60)
-print("TEST 3: Hybrid (spaCy + GLiNER2)")
-print("=" * 60)
-results_hybrid = processor.process_text(test_text, method="hybrid")
-print(f"Found {results_hybrid['total']} entities (spaCy: {results_hybrid['spacy_count']}, GLiNER2: {results_hybrid['gliner_count']})")
-for entity in results_hybrid["entities"]:
-    score_info = f" (score: {entity.get('score', 'N/A'):.2f})" if entity.get('score') else ""
-    print(f"  - {entity['text']} -> {entity['label']} ({entity['source']}){score_info}")
+for method_name, display_name in methods:
+    print("\n" + "=" * 60)
+    print(f"TEST: {display_name}")
+    print("=" * 60)
+    
+    try:
+        results = processor.process_text(test_text, method=method_name)
+        print(f"Found {results['total']} entities")
+        print(f"  spaCy: {results['spacy_count']}, GLiNER2: {results['gliner2_count']}, GLiNER: {results['gliner_count']}, GNfinder: {results['gnfinder_count']}")
+        
+        if results["entities"]:
+            print("\nEntities:")
+            for entity in results["entities"]:
+                score_info = f" (score: {entity.get('score', 'N/A'):.2f})" if entity.get('score') and isinstance(entity['score'], (int, float)) else ""
+                print(f"  - '{entity['text']}' -> {entity['label']} ({entity['source']}){score_info}")
+        else:
+            print("  No entities found")
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
 
 print("\n" + "=" * 60)
-print("Test complete.")
+print("All tests complete.")
 print("=" * 60)
