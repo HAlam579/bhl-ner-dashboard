@@ -1,40 +1,39 @@
+"""
+BHL NER Dashboard
+Biodiversity Heritage Library Named Entity Recognition Dashboard
+"""
+
 import sys
 import os
 import warnings
 import logging
-
-# === SUPPRESS ALL TERMINAL NOISE ===
-
-warnings.filterwarnings("ignore")
-
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
-logging.getLogger("streamlit.watcher").setLevel(logging.ERROR)
-logging.getLogger("streamlit.watcher.local_sources_watcher").setLevel(logging.ERROR)
-
-logging.getLogger("transformers").setLevel(logging.ERROR)
-
-logging.getLogger("urllib3").setLevel(logging.ERROR)
-logging.getLogger("filelock").setLevel(logging.ERROR)
-
-# Redirect stderr to suppress transformer module scanning
-import contextlib
 import io
+import time
+from datetime import datetime
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import time
-from datetime import datetime
 
-start_time = time.time()
+# Suppress terminal noise
+warnings.filterwarnings("ignore")
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
-print("=" * 60)
-print("BHL NER Dashboard - Starting up...")
-print("=" * 60)
+logging.getLogger("streamlit.watcher").setLevel(logging.ERROR)
+logging.getLogger("streamlit.watcher.local_sources_watcher").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+logging.getLogger("filelock").setLevel(logging.ERROR)
 
+st.set_page_config(
+    page_title="BHL NER Dashboard",
+    page_icon="🌿",
+    layout="wide"
+)
 
+# Entity colours
 ENTITY_COLOURS = {
     "SPECIES": "#90EE90",
     "LOCATION": "#00FFFF",
@@ -46,10 +45,28 @@ ENTITY_COLOURS = {
 }
 DEFAULT_COLOUR = "#FFFF00"
 
+EXTRACTION_METHODS = [
+    "Hybrid (spaCy + GLiNER2)",
+    "Hybrid (spaCy + GLiNER)",
+    "Hybrid (spaCy + GLiNER + GNfinder)",
+    "spaCy Only",
+    "GLiNER2 Only",
+    "GLiNER Only",
+    "GNfinder Only"
+]
+
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.fetch_bhl import get_page_text
+from src.ner_processor import NERProcessor
+
 
 def highlight_entities(text, entities):
     """Highlight entities in text with background colours."""
-    if not entities or len(entities) == 0:
+    if not entities:
         return text
     
     sorted_entities = sorted(entities, key=lambda x: len(x["text"]), reverse=True)
@@ -65,18 +82,20 @@ def highlight_entities(text, entities):
         colour = ENTITY_COLOURS.get(label, DEFAULT_COLOUR)
         start_idx = text.lower().find(entity_text.lower())
         
-        if start_idx != -1:
-            end_idx = start_idx + len(entity_text)
-            
-            overlap = False
-            for existing_start, existing_end, _ in replacements:
-                if not (end_idx <= existing_start or start_idx >= existing_end):
-                    overlap = True
-                    break
-            
-            if not overlap:
-                html_span = f'<span style="background-color: {colour}; padding: 2px 4px; border-radius: 3px;" title="{label}">{entity_text}</span>'
-                replacements.append((start_idx, end_idx, html_span))
+        if start_idx == -1:
+            continue
+        
+        end_idx = start_idx + len(entity_text)
+        
+        overlap = False
+        for existing_start, existing_end, _ in replacements:
+            if not (end_idx <= existing_start or start_idx >= existing_end):
+                overlap = True
+                break
+        
+        if not overlap:
+            html_span = f'<span style="background-color: {colour}; padding: 2px 4px; border-radius: 3px;" title="{label}">{entity_text}</span>'
+            replacements.append((start_idx, end_idx, html_span))
     
     replacements.sort(key=lambda x: x[0], reverse=True)
     
@@ -88,92 +107,101 @@ def highlight_entities(text, entities):
 
 
 def show_model_loading_status(processor, extraction_method):
-    """
-    Show which models were loaded during the request.
-    Returns: A tuple of (loaded_models_list, all_loaded_boolean)
-    """
-    loaded_models = []
-    if processor.models_loaded["spacy"]:
-        loaded_models.append("spaCy")
-    if processor.models_loaded["gliner2"]:
-        loaded_models.append("GLiNER2")
-    if processor.models_loaded["gliner"]:
-        loaded_models.append("GLiNER")
-    if processor.models_loaded["gnfinder"]:
-        loaded_models.append("GNfinder")
+    """Show which models were loaded during the request."""
+    model_map = {
+        "spacy": "spaCy",
+        "gliner2": "GLiNER2",
+        "gliner": "GLiNER",
+        "gnfinder": "GNfinder"
+    }
     
-    # Check if all expected models for the selected method are loaded
+    loaded_models = []
+    for key, name in model_map.items():
+        if processor.models_loaded.get(key, False):
+            loaded_models.append(name)
+    
     all_loaded = True
-    if "spaCy" in extraction_method and not processor.models_loaded["spacy"]:
-        all_loaded = False
-    if "GLiNER2" in extraction_method and not processor.models_loaded["gliner2"]:
-        all_loaded = False
-    if "GLiNER" in extraction_method and not processor.models_loaded["gliner"]:
-        all_loaded = False
-    if "GNfinder" in extraction_method and not processor.models_loaded["gnfinder"]:
-        all_loaded = False
+    for key, name in model_map.items():
+        if name in extraction_method and not processor.models_loaded.get(key, False):
+            all_loaded = False
+            break
     
     return loaded_models, all_loaded
 
 
-project_root = os.path.dirname(os.path.abspath(__file__))
+def process_and_display(text, source, method):
+    """Process text and update session state."""
+    processor = st.session_state.ner_processor
+    
+    process_start = time.time()
+    results = processor.process_text(text, method=method)
+    process_time = time.time() - process_start
+    
+    st.session_state.processed_text = text
+    st.session_state.entities = results["entities"]
+    st.session_state.counts = results["counts"]
+    st.session_state.source = source
+    st.session_state.processing_times.append(process_time)
+    st.session_state.total_pages_processed += 1
+    
+    return results, process_time
 
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
-from src.fetch_bhl import get_page_text, search_publications
-from src.ner_processor import NERProcessor
+def display_model_loading_message(processor, extraction_method):
+    """Display model loading status message."""
+    loaded_models, all_loaded = show_model_loading_status(processor, extraction_method)
+    
+    if not all_loaded and loaded_models:
+        st.info(f"💡 Models ({', '.join(loaded_models)}) were loaded. Subsequent requests will be faster.")
+    elif not all_loaded:
+        st.info("💡 Models are loading... Subsequent requests will be faster.")
+
+
+def initialize_session_state():
+    """Initialize all session state variables."""
+    defaults = {
+        "processed_text": "",
+        "entities": [],
+        "counts": {},
+        "source": "",
+        "processing_times": [],
+        "total_pages_processed": 0,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+start_time = time.time()
+print("=" * 60)
+print("BHL NER Dashboard - Starting up...")
+print("=" * 60)
+
+initialize_session_state()
 
 if "ner_processor" not in st.session_state:
     print("Creating NER processor...")
     load_start = time.time()
     st.session_state.ner_processor = NERProcessor()
     load_end = time.time()
-    print(f"✓ NER processor created in {load_end - load_start:.2f} seconds")
-    st.session_state.processor_load_time = load_end - load_start
+    load_time = load_end - load_start
+    print(f"✓ NER processor created in {load_time:.2f} seconds")
+    st.session_state.processor_load_time = load_time
 else:
     print("✓ NER processor already loaded from session state")
-
-if "processed_text" not in st.session_state:
-    st.session_state.processed_text = ""
-if "entities" not in st.session_state:
-    st.session_state.entities = []
-if "counts" not in st.session_state:
-    st.session_state.counts = {}
-if "source" not in st.session_state:
-    st.session_state.source = ""
-if "processing_times" not in st.session_state:
-    st.session_state.processing_times = []
-if "total_pages_processed" not in st.session_state:
-    st.session_state.total_pages_processed = 0
 
 end_time = time.time()
 print(f"✓ Total startup time: {end_time - start_time:.2f} seconds")
 print("=" * 60)
 
-st.set_page_config(
-    page_title="BHL NER Dashboard",
-    page_icon="🌿",
-    layout="wide"
-)
 
-
-# SIDEBAR
-
+# Sidebar
 with st.sidebar:
     st.subheader("⚙️ Extraction Method")
     extraction_method = st.selectbox(
         "Choose the NER extraction method:",
-        [
-            "Hybrid (spaCy + GLiNER2)",
-            "Hybrid (spaCy + GLiNER)",
-            "Hybrid (spaCy + GLiNER + GNfinder)",
-            "spaCy Only",
-            "GLiNER2 Only",
-            "GLiNER Only",
-            "GNfinder Only"
-        ],
-        help="Hybrid combines models for better accuracy. GLiNER is an updated model with better zero-shot capabilities.",
+        EXTRACTION_METHODS,
+        help="Hybrid combines models for better accuracy.",
         key="extraction_method_selectbox"
     )
 
@@ -188,70 +216,40 @@ with st.sidebar:
 
     st.divider()
 
-    # Performance Metrics in Sidebar
     st.subheader("⚡ Performance Metrics")
     
-    # Processor load time
     processor_load = st.session_state.get("processor_load_time", 0)
-    st.metric(
-        "Model Loading Time",
-        f"{processor_load:.2f}s",
-        help="Time taken to load NER models (only on first use)"
-    )
+    st.metric("Model Loading Time", f"{processor_load:.2f}s")
     
-    # Last processing time
     if st.session_state.processing_times:
         last_time = st.session_state.processing_times[-1]
-        st.metric(
-            "Last Processing Time",
-            f"{last_time:.2f}s",
-            help="Time taken for the most recent text processing"
-        )
+        st.metric("Last Processing Time", f"{last_time:.2f}s")
         
-        # Average processing time
         avg_time = sum(st.session_state.processing_times) / len(st.session_state.processing_times)
-        st.metric(
-            "Average Processing Time",
-            f"{avg_time:.2f}s",
-            help="Average time across all processed texts"
-        )
+        st.metric("Average Processing Time", f"{avg_time:.2f}s")
         
-        # Total processed
-        st.metric(
-            "Total Processed",
-            st.session_state.total_pages_processed,
-            help="Total number of texts processed"
-        )
-    
+        st.metric("Total Processed", st.session_state.total_pages_processed)
+
     st.divider()
     
-    # Model status
     st.subheader("📊 Model Status")
     processor = st.session_state.ner_processor
-
-    if processor.models_loaded["spacy"]:
-        st.success("✅ spaCy: Loaded")
-    else:
-        st.info("⏳ spaCy: Not loaded")
-
-    if processor.models_loaded["gliner2"]:
-        st.success("✅ GLiNER2: Loaded")
-    else:
-        st.info("⏳ GLiNER2: Not loaded")
-
-    if processor.models_loaded["gliner"]:
-        st.success("✅ GLiNER: Loaded")
-    else:
-        st.info("⏳ GLiNER: Not loaded")
-
-    if processor.models_loaded["gnfinder"]:
-        st.success("✅ GNfinder: Loaded")
-    else:
-        st.info("⏳ GNfinder: Not loaded")
+    
+    model_status = [
+        ("spacy", "spaCy"),
+        ("gliner2", "GLiNER2"),
+        ("gliner", "GLiNER"),
+        ("gnfinder", "GNfinder")
+    ]
+    
+    for key, name in model_status:
+        if processor.models_loaded.get(key, False):
+            st.success(f"✅ {name}: Loaded")
+        else:
+            st.info(f"⏳ {name}: Not loaded")
 
 
-# HEADER
-
+# Header
 st.title("🌿 BHL NER Dashboard")
 st.markdown("""
 This tool uses **Named Entity Recognition (NER)** to extract:
@@ -265,8 +263,7 @@ Enter a BHL Page ID or paste text below to get started.
 
 st.divider()
 
-
-# ADD USER INSTRUCTIONS
+# User instructions
 with st.expander("📖 How to Use This Dashboard", expanded=False):
     st.markdown("""
     ### Quick Start
@@ -295,8 +292,7 @@ with st.expander("📖 How to Use This Dashboard", expanded=False):
 st.divider()
 
 
-# INPUT SECTION
-
+# Input section
 st.subheader("📝 Input")
 
 col1, col2 = st.columns(2)
@@ -306,36 +302,27 @@ with col1:
     page_id = st.text_input(
         "Enter a BHL Page ID:",
         placeholder="e.g., 54850898",
-        help="Find a Page ID by opening a page on biodiversitylibrary.org and copying the number from the URL",
+        help="Find a Page ID by opening a page on biodiversitylibrary.org",
         key="page_id_input"
     )
     
-    fetch_button = st.button("Fetch from BHL", use_container_width=True, key="fetch_button")
-    
-    if fetch_button:
-        if page_id.strip():
+    if st.button("Fetch from BHL", use_container_width=True, key="fetch_button"):
+        if not page_id.strip():
+            st.warning("⚠️ Please enter a Page ID.")
+        else:
             with st.spinner(f"📡 Fetching BHL page {page_id}..."):
-                # Track fetch time
                 fetch_start = time.time()
                 text = get_page_text(page_id)
                 fetch_time = time.time() - fetch_start
                 
-                if text:
-                    st.session_state.processed_text = text
-                    st.session_state.source = f"BHL Page {page_id}"
-                    
-                    # Track processing time
-                    process_start = time.time()
+                if not text:
+                    st.error(f"❌ Failed to fetch text from page {page_id}.")
+                else:
+                    results, process_time = process_and_display(
+                        text, f"BHL Page {page_id}", extraction_method
+                    )
                     processor = st.session_state.ner_processor
-                    results = processor.process_text(text, method=extraction_method)
-                    process_time = time.time() - process_start
                     
-                    st.session_state.entities = results["entities"]
-                    st.session_state.counts = results["counts"]
-                    st.session_state.processing_times.append(process_time)
-                    st.session_state.total_pages_processed += 1
-                    
-                    # Show timing information in success message
                     st.success(
                         f"✅ Fetched {len(text)} characters and found {results['total']} entities!\n\n"
                         f"⏱️ **Fetch time**: {fetch_time:.2f}s | "
@@ -343,17 +330,7 @@ with col1:
                         f"**Total**: {fetch_time + process_time:.2f}s"
                     )
                     
-                    # Show model loading status (using the reusable function)
-                    loaded_models, all_loaded = show_model_loading_status(processor, extraction_method)
-                    
-                    if not all_loaded and loaded_models:
-                        st.info(f"💡 Models ({', '.join(loaded_models)}) were loaded during this request. Subsequent requests will be faster.")
-                    elif not all_loaded:
-                        st.info("💡 Models are loading... Subsequent requests will be faster.")
-                else:
-                    st.error(f"❌ Failed to fetch text from page {page_id}.")
-        else:
-            st.warning("⚠️ Please enter a Page ID.")
+                    display_model_loading_message(processor, extraction_method)
 
 with col2:
     st.write("**Option 2: Paste your own text**")
@@ -364,82 +341,52 @@ with col2:
         key="pasted_text_input"
     )
     
-    process_button = st.button("Process Text", use_container_width=True, key="process_button")
-    
-    if process_button:
-        if pasted_text.strip():
+    if st.button("Process Text", use_container_width=True, key="process_button"):
+        if not pasted_text.strip():
+            st.warning("⚠️ Please paste some text.")
+        else:
             with st.spinner(f"🧠 Processing {len(pasted_text)} characters..."):
-                # Track processing time
-                process_start = time.time()
+                results, process_time = process_and_display(
+                    pasted_text, "Pasted text", extraction_method
+                )
                 processor = st.session_state.ner_processor
-                results = processor.process_text(pasted_text, method=extraction_method)
-                process_time = time.time() - process_start
-                
-                st.session_state.processed_text = pasted_text
-                st.session_state.entities = results["entities"]
-                st.session_state.counts = results["counts"]
-                st.session_state.source = "Pasted text"
-                st.session_state.processing_times.append(process_time)
-                st.session_state.total_pages_processed += 1
                 
                 st.success(
                     f"✅ Found {results['total']} entities in {len(pasted_text)} characters!\n\n"
                     f"⏱️ **Processing time**: {process_time:.2f}s"
                 )
                 
-                # Show model loading status (using the reusable function)
-                loaded_models, all_loaded = show_model_loading_status(processor, extraction_method)
-                
-                if not all_loaded and loaded_models:
-                    st.info(f"💡 Models ({', '.join(loaded_models)}) were loaded during this request. Subsequent requests will be faster.")
-                elif not all_loaded:
-                    st.info("💡 Models are loading... Subsequent requests will be faster.")
-        else:
-            st.warning("⚠️ Please paste some text.")
+                display_model_loading_message(processor, extraction_method)
 
 col_clear1, col_clear2, col_clear3 = st.columns([1, 1, 4])
 with col_clear1:
     if st.button("🗑️ Clear All", use_container_width=True):
+        for key in ["processed_text", "entities", "counts", "source", "processing_times"]:
+            if key in st.session_state:
+                st.session_state[key] = [] if key in ["entities", "processing_times"] else {}
         st.session_state.processed_text = ""
-        st.session_state.entities = []
-        st.session_state.counts = {}
-        st.session_state.source = ""
-        st.session_state.processing_times = []
         st.session_state.total_pages_processed = 0
+        st.rerun()
 
 st.divider()
 
 
-# RESULTS SECTION
-
+# Results section
 stored_text = st.session_state.get("processed_text", "")
 entities = st.session_state.get("entities", [])
 counts = st.session_state.get("counts", {})
 
 if stored_text and entities:
     
-    # Show timing summary at top of results
     if st.session_state.processing_times:
         col_time1, col_time2, col_time3 = st.columns(3)
         with col_time1:
-            st.metric(
-                "🕐 Processing Time",
-                f"{st.session_state.processing_times[-1]:.2f}s",
-                help="Time taken for this text processing"
-            )
+            st.metric("🕐 Processing Time", f"{st.session_state.processing_times[-1]:.2f}s")
         with col_time2:
             avg_time = sum(st.session_state.processing_times) / len(st.session_state.processing_times)
-            st.metric(
-                "📊 Average Time",
-                f"{avg_time:.2f}s",
-                help="Average processing time across all texts"
-            )
+            st.metric("📊 Average Time", f"{avg_time:.2f}s")
         with col_time3:
-            st.metric(
-                "📄 Total Processed",
-                st.session_state.total_pages_processed,
-                help="Total number of texts processed in this session"
-            )
+            st.metric("📄 Total Processed", st.session_state.total_pages_processed)
     
     st.divider()
 
@@ -452,10 +399,8 @@ if stored_text and entities:
     
     st.divider()
     
-
     st.subheader("🔍 Extracted Entities")
     
-    # Entity Table
     df_data = []
     for entity in entities:
         row = {
@@ -465,27 +410,22 @@ if stored_text and entities:
             "Start": entity.get("start", "N/A"),
             "End": entity.get("end", "N/A"),
         }
-        # Only add Score if it exists
         if "score" in entity:
-            row["Score"] = entity.get("score", "N/A")
+            row["Score"] = f"{entity['score']:.4f}" if isinstance(entity['score'], (int, float)) else entity['score']
         df_data.append(row)
 
     df = pd.DataFrame(df_data).drop_duplicates(subset=["Entity", "Type"])
     st.dataframe(df, use_container_width=True, hide_index=True)
     
-
     st.write("**Summary:**")
-    
     tags_html = ""
     for label, count in counts.items():
         colour = ENTITY_COLOURS.get(label, DEFAULT_COLOUR)
         tags_html += f'<span style="background-color: {colour}; padding: 4px 12px; border-radius: 12px; font-weight: bold; display: inline-block; margin: 4px 4px;">{label}: {count}</span> '
-    
     st.markdown(tags_html, unsafe_allow_html=True)
     
-    # Bar Chart
     st.subheader("📊 Entity Type Distribution")
-
+    
     if counts:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.bar(counts.keys(), counts.values(), color='#00897B')
@@ -498,9 +438,7 @@ if stored_text and entities:
     else:
         st.info("No data to display.")
 
-    # CSV Download
     st.write("**Download Results:**")
-    
     df_export = pd.DataFrame(df_data)
     csv_buffer = io.StringIO()
     df_export.to_csv(csv_buffer, index=False)
@@ -517,8 +455,6 @@ if stored_text and entities:
 else:
     st.info("💡 No text processed yet. Paste text or fetch a BHL page using the buttons above.")
 
-
-# FOOTER
 
 st.divider()
 st.caption("🌿 BHL NER Dashboard | Built with Streamlit")
