@@ -1,8 +1,3 @@
-"""
-NER Processor for BHL Dashboard.
-Extracts entities using spaCy, GLiNER2, GLiNER, and GNfinder.
-"""
-
 import os
 import sys
 import json
@@ -17,11 +12,18 @@ import spacy
 from gliner2 import GLiNER2
 from gliner import GLiNER
 
-# Suppress GLiNER warnings
+# from taxonerd import TaxoNERD
+# try:
+#     from taxonerd import TaxoNERD
+#     TAXONERD_AVAILABLE = True
+# except ImportError:
+#     TAXONERD_AVAILABLE = False
+#     TaxoNERD = None
+#     print("⚠️ TaxoNERD not available. Install with: py -3.10 -m pip install taxonerd")
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="gliner")
 
-# Label standardisation mapping
 LABEL_STANDARDISATION = {
     "GPE": "LOCATION",
     "LOC": "LOCATION",
@@ -38,21 +40,16 @@ LABEL_STANDARDISATION = {
 
 
 def standardise_label(label):
-    """Standardise entity labels for consistency across models."""
     return LABEL_STANDARDISATION.get(label, label)
 
 
 class NERProcessor:
-    """
-    Process text using spaCy, GLiNER2, GLiNER, and GNfinder.
-    Supports multiple extraction methods.
-    """
 
     def __init__(self):
-        """Initialise the processor. Models are not loaded yet."""
         self.nlp = None
         self.gliner2 = None
         self.gliner = None
+        # self.taxonerd = None
 
         self.gnfinder_available = False
         self.gnfinder_path = None
@@ -62,6 +59,7 @@ class NERProcessor:
             "gliner2": False,
             "gliner": False,
             "gnfinder": False,
+            # "taxonerd": False,
         }
 
         self._check_gnfinder()
@@ -106,53 +104,43 @@ class NERProcessor:
         print("     2. Place gnfinder.exe in C:\\bin or add to PATH")
         print("     3. Or place it in your project folder")
 
+
     def load_spacy(self):
-        """Load spaCy model on demand."""
         if self.models_loaded["spacy"]:
             return
 
         try:
-            print("  Loading spaCy model...")
             self.nlp = spacy.load("en_core_web_sm")
             self.models_loaded["spacy"] = True
-            print("  ✓ spaCy model loaded successfully")
         except Exception as e:
-            print(f"  ✗ Error loading spaCy: {e}")
-            print("  spaCy will be disabled for this session.")
+            print(f"Error loading spaCy: {e}")
+
 
     def load_gliner2(self):
-        """Load GLiNER2 model on demand."""
         if self.models_loaded["gliner2"]:
             return
-
         try:
-            print("  Loading GLiNER2 model...")
             self.gliner2 = GLiNER2.from_pretrained("fastino/gliner2-base-v1")
             self.models_loaded["gliner2"] = True
             print("  ✓ GLiNER2 model loaded successfully")
         except Exception as e:
-            print(f"  ✗ Error loading GLiNER2: {e}")
-            print("  GLiNER2 will be disabled for this session.")
+            print(f" Error loading GLiNER2: {e}")
+
 
     def load_gliner(self):
-        """Load updated GLiNER model on demand."""
         if self.models_loaded["gliner"]:
             return
-
         try:
-            print("  Loading updated GLiNER model...")
             self.gliner = GLiNER.from_pretrained(
                 "gliner-community/gliner_medium-v2.5",
                 load_tokenizer=True
             )
             self.models_loaded["gliner"] = True
-            print("  ✓ Updated GLiNER model loaded successfully")
         except Exception as e:
-            print(f"  ✗ Error loading updated GLiNER: {e}")
-            print("  Updated GLiNER will be disabled for this session.")
+            print(f"Error loading updated GLiNER: {e}")
+
 
     def load_gnfinder(self):
-        """Load/verify GNfinder is available."""
         if self.models_loaded["gnfinder"]:
             return
 
@@ -175,6 +163,25 @@ class NERProcessor:
         except Exception as e:
             print(f"  ✗ Error loading GNfinder: {e}")
 
+    
+    # def load_taxonerd(self):
+    #     if not TAXONERD_AVAILABLE:
+    #         print("  ⚠️ TaxoNERD not available. Skipping.")
+    #         return
+    #     if self.models_loaded["taxonerd"]:
+    #         return
+    #     try:
+    #         # Initialize without model parameter
+    #         self.taxonerd = TaxoNERD(
+    #             prefer_gpu=False,
+    #             verbose=False
+    #         )
+    #         self.models_loaded["taxonerd"] = True
+    #         print("  ✓ TaxoNERD loaded successfully")
+    #     except Exception as e:
+    #         print(f"  ✗ Error loading TaxoNERD: {e}")
+
+    
     def normalise_text(self, text):
         """Normalise text for consistent processing."""
         if not text or not isinstance(text, str):
@@ -186,7 +193,6 @@ class NERProcessor:
         return " ".join(text.split())
 
     def process_spacy(self, text):
-        """Extract standard entities using spaCy."""
         self.load_spacy()
 
         if self.nlp is None or not text:
@@ -283,7 +289,6 @@ class NERProcessor:
             return []
 
     def process_gliner(self, text, threshold=0.5):
-        """Process text using the GLiNER model."""
         self.load_gliner()
 
         if self.gliner is None or not text:
@@ -407,7 +412,6 @@ class NERProcessor:
             return []
 
     def process_gnfinder(self, text, verify=False, language="eng"):
-        """Process text using GNfinder with correct CSV parsing."""
         self.load_gnfinder()
 
         if not self.models_loaded["gnfinder"] or not text:
@@ -551,6 +555,37 @@ class NERProcessor:
             print(f"  ✗ Error during GNfinder processing: {e}")
             return []
 
+
+    # def process_taxonerd(self, text):
+    #     self.load_taxonerd()
+
+    #     if self.taxonerd is None or not text:
+    #         return []
+
+    #     try:
+    #         doc = self.taxonerd.ner(text)
+
+    #         entities = []
+    #         for ent in doc.ents:
+    #             start_idx = text.lower().find(ent.text.lower())
+    #             if start_idx != -1:
+    #                 entities.append({
+    #                     "text": ent.text,
+    #                     "label": "SPECIES",
+    #                     "source": "TaxoNERD",
+    #                     "start": start_idx,
+    #                     "end": start_idx + len(ent.text),
+    #                     "score": 1.0,
+    #                     "taxo_label": ent.label_
+    #                 })
+    #         print(f" TaxoNERD found {len(entities)} taxonomic entities")
+    #         return entities
+    #     except Exception as e:
+    #         print(f"  ✗ Error during TaxoNERD processing: {e}")
+    #         return []
+
+
+
     def process_text(self, text, method="hybrid"):
         """
         Process text with selected NER method.
@@ -562,9 +597,11 @@ class NERProcessor:
                 - "gliner2_only" / "gliner2 only"
                 - "gliner_only" / "gliner only"
                 - "gnfinder_only" / "gnfinder only"
+                - "taxonerd_only" / "taxonerd only"
                 - "hybrid" (spaCy + GLiNER2 - default)
                 - "hybrid_g" (spaCy + GLiNER)
                 - "hybrid_gn" (spaCy + GLiNER + GNfinder)
+                - "hybrid_tx" (spaCy + GLiNER + TaxoNERD)
 
         Returns:
             dict: Combined results
@@ -580,6 +617,7 @@ class NERProcessor:
                 "gliner2_count": 0,
                 "gliner_count": 0,
                 "gnfinder_count": 0,
+                # "taxonerd_count": 0,
                 "error": "Invalid input"
             }
 
@@ -593,7 +631,7 @@ class NERProcessor:
             gliner2_entities = []
             gliner_entities = []
             gnfinder_entities = []
-
+            # taxonerd_entities = []
             method_lower = method.lower().strip()
 
             # spaCy only
@@ -624,6 +662,13 @@ class NERProcessor:
                 print(f"  GNfinder found {len(gnfinder_entities)} entities")
                 all_entities = gnfinder_entities
 
+            # TaxoNERD only
+            # elif method_lower in ["taxonerd only", "taxonerd_only"]:
+            #     print("Running TaxoNERD only...")
+            #     taxonerd_entities = self.process_taxonerd(text)
+            #     print(f"  TaxoNERD found {len(taxonerd_entities)} entities")
+            #     all_entities = taxonerd_entities
+
             # Hybrid: spaCy + GLiNER
             elif method_lower in ["hybrid g", "hybrid_g"]:
                 print("Running spaCy + updated GLiNER hybrid...")
@@ -641,6 +686,15 @@ class NERProcessor:
                 gnfinder_entities = self.process_gnfinder(text)
                 print(f"  spaCy: {len(spacy_entities)}, GLiNER: {len(gliner_entities)}, GNfinder: {len(gnfinder_entities)}")
                 all_entities = spacy_entities + gliner_entities + gnfinder_entities
+
+            # Hybrid: spaCy + GLiNER + TaxoNERD
+            # elif method_lower in ["hybrid_tx", "hybrid_taxonerd", "hybrid taxonerd"]:
+            #     print("Running spaCy + GLiNER + TaxoNERD hybrid...")
+            #     spacy_entities = self.process_spacy(text)
+            #     gliner_entities = self.process_gliner(text)
+            #     taxonerd_entities = self.process_taxonerd(text)
+            #     print(f"  spaCy: {len(spacy_entities)}, GLiNER: {len(gliner_entities)}, TaxoNERD: {len(taxonerd_entities)}")
+            #     all_entities = spacy_entities + gliner_entities + taxonerd_entities
 
             # Default: hybrid (spaCy + GLiNER2)
             else:
@@ -670,6 +724,7 @@ class NERProcessor:
                 "gliner2_count": len(gliner2_entities),
                 "gliner_count": len(gliner_entities),
                 "gnfinder_count": len(gnfinder_entities),
+                # "taxonerd_count": len(taxonerd_entities),
                 "method": method
             }
 
@@ -684,5 +739,6 @@ class NERProcessor:
                 "gliner2_count": 0,
                 "gliner_count": 0,
                 "gnfinder_count": 0,
+                # "taxonerd_count": 0,
                 "error": str(e)
             }

@@ -1,9 +1,3 @@
-# tests/test_gnfinder.py
-"""
-Clean test for GNfinder integration.
-Run with: py tests/test_gnfinder.py
-"""
-
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -15,7 +9,6 @@ def test_gnfinder():
     print("GNfinder Integration Test")
     print("=" * 60)
     
-    # Create processor
     processor = NERProcessor()
     
     # Check if GNfinder is available
@@ -36,7 +29,7 @@ def test_gnfinder():
     print("Processing with GNfinder...")
     print("=" * 60)
     
-    # Process the text
+
     results = processor.process_gnfinder(test_text, verify=False)
     
     print(f"\nFound {len(results)} entities:")

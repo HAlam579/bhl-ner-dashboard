@@ -1,8 +1,3 @@
-"""
-BHL NER Dashboard
-Biodiversity Heritage Library Named Entity Recognition Dashboard
-"""
-
 import sys
 import os
 import warnings
@@ -15,7 +10,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Suppress terminal noise
 warnings.filterwarnings("ignore")
 os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -33,7 +27,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Entity colours
 ENTITY_COLOURS = {
     "SPECIES": "#90EE90",
     "LOCATION": "#00FFFF",
@@ -49,13 +42,14 @@ EXTRACTION_METHODS = [
     "Hybrid (spaCy + GLiNER2)",
     "Hybrid (spaCy + GLiNER)",
     "Hybrid (spaCy + GLiNER + GNfinder)",
+    # "Hybrid (spaCy + GLiNER + TaxoNERD)",
     "spaCy Only",
     "GLiNER2 Only",
     "GLiNER Only",
-    "GNfinder Only"
+    "GNfinder Only",
+    # "TaxoNERD Only"
 ]
 
-# Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -65,7 +59,6 @@ from src.ner_processor import NERProcessor
 
 
 def highlight_entities(text, entities):
-    """Highlight entities in text with background colours."""
     if not entities:
         return text
     
@@ -107,12 +100,12 @@ def highlight_entities(text, entities):
 
 
 def show_model_loading_status(processor, extraction_method):
-    """Show which models were loaded during the request."""
     model_map = {
         "spacy": "spaCy",
         "gliner2": "GLiNER2",
         "gliner": "GLiNER",
-        "gnfinder": "GNfinder"
+        "gnfinder": "GNfinder",
+        # "taxonerd": "TaxoNERD"
     }
     
     loaded_models = []
@@ -130,7 +123,6 @@ def show_model_loading_status(processor, extraction_method):
 
 
 def process_and_display(text, source, method):
-    """Process text and update session state."""
     processor = st.session_state.ner_processor
     
     process_start = time.time()
@@ -148,7 +140,6 @@ def process_and_display(text, source, method):
 
 
 def display_model_loading_message(processor, extraction_method):
-    """Display model loading status message."""
     loaded_models, all_loaded = show_model_loading_status(processor, extraction_method)
     
     if not all_loaded and loaded_models:
@@ -158,7 +149,6 @@ def display_model_loading_message(processor, extraction_method):
 
 
 def initialise_session_state():
-    """Initialise all session state variables."""
     defaults = {
         "processed_text": "",
         "entities": [],
@@ -199,11 +189,13 @@ if "ner_processor" not in st.session_state:
         processor.load_gliner()
         print("Loading GNfinder model...")
         processor.load_gnfinder()
+        # print("Loading TaxoNERD model...")
+        # processor.load_taxonerd()
 
         load_end = time.time()
         load_time = load_end - load_start
 
-        st.session_state.processor_load_time = load_time # Store load time
+        st.session_state.processor_load_time = load_time 
 
         st.success(f"✓ All models loaded in {load_time:.2f} seconds")
         print(f"✓ All models loaded in {load_time:.2f} seconds")
@@ -217,6 +209,8 @@ if "ner_processor" not in st.session_state:
             loaded.append("GLiNER")
         if processor.models_loaded["gnfinder"]:
             loaded.append("GNfinder")
+        # if processor.models_loaded["taxonerd"]:
+        #     loaded.append("TaxoNERD")
         print(f"Models loaded: {', '.join(loaded)}")
 
         # Small delay to ensure spinner message is visible
@@ -235,6 +229,8 @@ else:
         loaded.append("GLiNER")
     if processor.models_loaded["gnfinder"]:
         loaded.append("GNfinder")
+    # if processor.models_loaded["taxonerd"]:
+        # loaded.append("TaxoNERD")
     st.info(f"✅ Models ready: {', '.join(loaded)}")
 
 
@@ -282,7 +278,8 @@ with st.sidebar:
         ("spacy", "spaCy"),
         ("gliner2", "GLiNER2"),
         ("gliner", "GLiNER"),
-        ("gnfinder", "GNfinder")
+        ("gnfinder", "GNfinder"),
+        # ("taxonerd", "TaxoNERD")
     ]
     
     for key, name in model_status:

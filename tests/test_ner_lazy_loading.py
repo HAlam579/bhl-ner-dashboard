@@ -1,5 +1,5 @@
 """
-Tests for NER Processor with Lazy Loading (including GNfinder).
+Tests for NER Processor with Lazy Loading.
 
 Run: python tests/test_ner_lazy_loading.py [--quick] [--performance]
 """
@@ -16,7 +16,7 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 
-# Suppress warnings
+
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(
 ))
 from ner_processor import NERProcessor
 
-# Global shared processor - loaded ONCE for all tests
+
 _SHARED_PROCESSOR = None
 _SHARED_PROCESSOR_LOADED = False
 
@@ -40,7 +40,7 @@ def get_shared_processor():
         print("Loading shared processor (once for all tests)...")
         _SHARED_PROCESSOR = NERProcessor()
         
-        # Pre-load models silently
+
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         try:
@@ -56,7 +56,6 @@ def get_shared_processor():
 
 
 class TestLazyLoadingBehaviour(unittest.TestCase):
-    """Verify models load only when first used."""
     
     def setUp(self):
         self.processor = NERProcessor()
@@ -92,11 +91,18 @@ class TestLazyLoadingBehaviour(unittest.TestCase):
         self.assertTrue(self.processor.models_loaded["gliner"])
         print("✓ GLiNER loads on first use")
     
-    def test_gnfinder_loads_on_demand(self):  # NEW
+    def test_gnfinder_loads_on_demand(self):
         # GNfinder is checked at init, but not "loaded" until used
         self.processor.process_gnfinder("Test text")
         self.assertTrue(self.processor.models_loaded["gnfinder"])
         print("✓ GNfinder loads on first use")
+
+    # def test_taxonerd_loads_on_demand(self):
+    #     self.assertIsNone(self.processor.taxonerd)
+    #     self.processor.process_taxonerd("Test text")
+    #     self.assertIsNotNone(self.processor.taxonerd)
+    #     self.assertTrue(self.processor.models_loaded["taxonerd"])
+    #     print("✓ TaxoNERD loads on first use")
     
     def test_models_cached_after_loading(self):
         self.processor.process_spacy("First text")
@@ -108,7 +114,6 @@ class TestLazyLoadingBehaviour(unittest.TestCase):
 
 
 class TestExtractionQuality(unittest.TestCase):
-    """Verify extraction works correctly."""
     
     @classmethod
     def setUpClass(cls):
@@ -200,7 +205,6 @@ class TestExtractionQuality(unittest.TestCase):
 
 
 class TestFilteringAndProcessing(unittest.TestCase):
-    """Test filters and processing logic."""
     
     @classmethod
     def setUpClass(cls):
@@ -225,7 +229,6 @@ class TestFilteringAndProcessing(unittest.TestCase):
 
 
 class TestPerformance(unittest.TestCase):
-    """Test performance improvements."""
     
     @classmethod
     def setUpClass(cls):
@@ -265,7 +268,6 @@ class TestPerformance(unittest.TestCase):
 
 
 class TestEdgeCases(unittest.TestCase):
-    """Test edge cases and error handling."""
     
     @classmethod
     def setUpClass(cls):
@@ -301,7 +303,7 @@ class TestEdgeCases(unittest.TestCase):
 
 
 def run_quick_test():
-    """Quick test for manual verification."""
+
     print("\n" + "=" * 70)
     print("QUICK TEST (All Methods)")
     print("=" * 70)
@@ -329,7 +331,7 @@ def run_quick_test():
 
 
 def run_performance_demo():
-    """Demonstrate performance benefits."""
+
     print("\n" + "=" * 70)
     print("PERFORMANCE DEMO")
     print("=" * 70)

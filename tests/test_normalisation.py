@@ -1,19 +1,12 @@
-"""
-Test text normalisation functionality.
-Run with: py tests/test_normalisation.py
-"""
-
 import sys
 import os
 
-# Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.ner_processor import NERProcessor
 
 
 def test_normalisation():
-    """Test the normalise_text method with various inputs."""
     
     processor = NERProcessor()
     
@@ -22,7 +15,7 @@ def test_normalisation():
     print("="*70)
     
     test_cases = [
-        # (description, input_text, expected_output)
+
         {
             "name": "Multiple spaces",
             "input": "Panda    lives    in    China",
@@ -146,8 +139,8 @@ def test_normalisation():
     
     print(f"\nProcessed text (normalised):")
     print("-"*40)
-    # The text is normalised inside process_text
-    # We can't easily get it back, but we can check if entities were found
+
+
     print(f"Entities found: {results['total']}")
     
     if results["entities"]:
@@ -155,7 +148,7 @@ def test_normalisation():
         for entity in results["entities"]:
             print(f"  {entity['text']} -> {entity['label']}")
     
-    # Summary
+
     print("\n" + "="*70)
     print("TEST SUMMARY")
     print("="*70)
@@ -172,7 +165,6 @@ def test_normalisation():
 
 
 def test_normalisation_edge_cases():
-    """Test edge cases for normalisation."""
     
     processor = NERProcessor()
     

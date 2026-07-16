@@ -1,21 +1,13 @@
-"""
-Test the NER Processor on real BHL texts with timing.
-Run with: py tests/test_bhl_texts.py
-"""
-
 import sys
 import os
 import time
 from datetime import datetime
 
-# Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.fetch_bhl import get_page_text
 from src.ner_processor import NERProcessor
 
-
-# Real BHL Page IDs to test
 BHL_PAGE_IDS = [
     54850898,   # Butterfly counts
     36831872,   # Bird nesting
@@ -33,7 +25,6 @@ BHL_PAGE_IDS = [
 
 
 def test_bhl_pages():
-    """Test the processor on multiple real BHL pages with timing."""
     
     print("=" * 70)
     print("TESTING NER PROCESSOR ON REAL BHL TEXTS (WITH TIMING)")
@@ -92,7 +83,8 @@ def test_bhl_pages():
                     "spacy_count": results["spacy_count"],
                     "gliner2_count": results["gliner2_count"],
                     "gliner_count": results["gliner_count"],
-                    "gnfinder_count": results["gnfinder_count"],  # NEW
+                    "gnfinder_count": results["gnfinder_count"],
+                    # "taxonerd_count": results["taxonerd_count"],
                     "counts": results["counts"],
                     "error": None
                 }
@@ -119,6 +111,7 @@ def test_bhl_pages():
                     "gliner2_count": 0,
                     "gliner_count": 0,
                     "gnfinder_count": 0,
+                    # "taxonerd_count": 0,
                     "counts": {},
                     "error": error_msg
                 })
@@ -143,7 +136,6 @@ def test_bhl_pages():
     
     total_time = time.time() - overall_start
     
-    # Print summary
     print("\n" + "=" * 70)
     print("PERFORMANCE SUMMARY")
     print("=" * 70)
@@ -187,19 +179,20 @@ def test_bhl_pages():
         print(f"  Entities/second: {entities_per_second:.1f}")
         print(f"  Average entities per page: {entities_per_page:.1f}")
         
-        # Model contribution analysis
+
         total_spacy = sum(r["spacy_count"] for r in successful_results)
         total_gliner2 = sum(r["gliner2_count"] for r in successful_results)
         total_gliner = sum(r["gliner_count"] for r in successful_results)
         total_gnfinder = sum(r["gnfinder_count"] for r in successful_results)  # NEW
-        
+        # total_taxonerd = sum(r["taxonerd_count"] for r in successful_results)  # NEW
+
         print(f"\n🤖 Model contributions:")
         print(f"  spaCy: {total_spacy} entities ({total_spacy/total_entities*100:.1f}%)")
         print(f"  GLiNER2: {total_gliner2} entities ({total_gliner2/total_entities*100:.1f}%)")
         print(f"  GLiNER: {total_gliner} entities ({total_gliner/total_entities*100:.1f}%)")
         print(f"  GNfinder: {total_gnfinder} entities ({total_gnfinder/total_entities*100:.1f}%)")  # NEW
-        
-        # Entity type distribution
+        # print(f"  TaxoNERD: {total_taxonerd} entities ({total_taxonerd/total_entities*100:.1f}%)")  # NEW
+
         all_counts = {}
         for r in successful_results:
             for label, count in r["counts"].items():

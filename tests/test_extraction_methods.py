@@ -1,12 +1,6 @@
-"""
-Test script to verify all extraction methods including GLiNER.
-Run with: py tests/test_extraction_methods.py
-"""
-
 import sys
 import os
 
-# Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.ner_processor import NERProcessor
@@ -15,26 +9,28 @@ print("=" * 60)
 print("Testing All Extraction Methods")
 print("=" * 60)
 
-# Test text with various entity types
+
 test_text = """The giant panda Ailuropoda melanoleuca is a bear native to China.
 It was first described by French missionary Armand David in 1869.
 The habitat includes bamboo forests in Sichuan province."""
 
 print(f"\nTest text: {test_text}")
 
-# Create processor
+
 print("\nLoading NER processor...")
 processor = NERProcessor()
 
-# Test all methods
+
 methods = [
     ("spacy_only", "spaCy Only"),
     ("gliner2_only", "GLiNER2 Only"),
     ("gliner_only", "GLiNER Only"),
     ("gnfinder_only", "GNfinder Only"),
+    # ("taxonerd_only", "TaxoNERD Only"),
     ("hybrid", "Hybrid (spaCy + GLiNER2)"),
     ("hybrid_g", "Hybrid (spaCy + GLiNER)"),
     ("hybrid_gn", "Hybrid (spaCy + GLiNER + GNfinder)"),
+    # ("hybrid_tx", "Hybrid (spaCy + GLiNER + TaxoNERD)"),
 ]
 
 for method_name, display_name in methods:

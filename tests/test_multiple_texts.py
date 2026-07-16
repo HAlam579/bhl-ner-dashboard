@@ -1,7 +1,3 @@
-"""
-Test the NER Processor on Multiple Texts with GNfinder.
-"""
-
 import sys
 import os
 
@@ -11,7 +7,7 @@ from ner_processor import NERProcessor
 
 
 def run_test(processor, text, test_name, method="hybrid_gn"):
-    """Run a single test and print formatted results."""
+
     print("\n" + "=" * 70)
     print(f"TEST: {test_name} (Method: {method})")
     print("=" * 70)
@@ -39,6 +35,7 @@ def run_test(processor, text, test_name, method="hybrid_gn"):
         "gliner2_count": results["gliner2_count"],
         "gliner_count": results["gliner_count"],
         "gnfinder_count": results["gnfinder_count"],
+        # "taxonerd_count": results["taxonerd_count"],
         "counts": results["counts"]
     }
 
@@ -101,7 +98,8 @@ def main():
     avg_gliner2 = sum(s["gliner2_count"] for s in results_summary) / len(results_summary)
     avg_gliner = sum(s["gliner_count"] for s in results_summary) / len(results_summary)
     avg_gnfinder = sum(s["gnfinder_count"] for s in results_summary) / len(results_summary)
-    
+    # avg_taxonerd = sum(s["taxonerd_count"] for s in results_summary) / len(results_summary)
+
     print(f"\n{'Average':<20} {avg_total:<8.1f} {avg_spacy:<8.1f} {avg_gliner2:<8.1f} {avg_gliner:<8.1f} {avg_gnfinder:<8.1f}")
 
 
