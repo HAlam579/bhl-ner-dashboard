@@ -150,6 +150,48 @@ All tests are passing (25/25).
 
 ---
 
+## 🔌 Plugin System
+
+The dashboard uses a **plugin system** that automatically discovers NER models. To add a new model, you don't need to edit any existing code.
+
+### How to Add a New Model
+
+1. Create a new Python file in `src/models/` (e.g., `my_model.py`)
+
+2. Inherit from `BaseNERModel` and implement four things:
+
+```python
+from .base import BaseNERModel
+
+class MyModel(BaseNERModel):
+    
+    @property
+    def name(self):
+        return "My Model"          # Display name
+    
+    @property
+    def key(self):
+        return "my_model"          # Unique identifier
+    
+    def load(self):
+        # Load your model here
+        self.loaded = True
+    
+    def extract(self, text):
+        # Extract entities from text
+        # Return list of dicts with: text, label, source, start, end, score (optional)
+        entities = []
+        return entities
+```
+
+3. Restart the dashboard - your model is automatically discovered!
+
+### How It Works
+
+The system scans the `src/models/` folder on startup and loads any class that inherits from `BaseNERModel`. No changes to `ner_processor.py` or `dashboard.py` are required.
+
+---
+
 ## 👏 Acknowledgements
 
 - **[Xia Cui](https://www.mmu.ac.uk/staff/profile/dr-xia-cui)** - Internship Supervisor, Senior Lecturer in Software Engineering, Manchester Metropolitan University
