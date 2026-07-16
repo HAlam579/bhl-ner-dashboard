@@ -1,8 +1,17 @@
 import requests
 import json
 import time
+import os
+from dotenv import load_dotenv
 
-API_KEY = "e68afbdd-1f4b-4915-9758-14861dcdd407"
+load_dotenv()
+
+API_KEY = os.getenv("BHL_API_KEY")
+
+if not API_KEY:
+    raise ValueError("BHL_API_KEY not found in environment variables. Please set it in your .env file.")
+
+
 BASE_URL = "https://www.biodiversitylibrary.org/api3"
 
 
