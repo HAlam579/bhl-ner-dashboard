@@ -195,6 +195,24 @@ The system scans the `src/models/` folder on startup and loads any class that in
 
 ---
 
+## 🔮 Future Work
+
+While the dashboard is fully functional, several enhancements could further improve its usability and capabilities:
+
+| Enhancement | Description |
+|-------------|-------------|
+| **Clickable Entity Navigation** | Clicking an entity in the table could scroll to and highlight its position in the text |
+| **Confidence Threshold Slider** | Allow users to filter entities by confidence score for GLiNER |
+| **Batch Processing** | Process multiple BHL Page IDs at once and export combined results |
+| **PDF Upload** | Support uploading PDF files directly for text extraction |
+| **Entity Linking** | Link species names to taxonomic databases (GBIF, NCBI, TAXREF) |
+| **Export Formats** | Add support for JSON, BIO, and other common NER output formats |
+| **Multilingual Support** | Extend NER models to support languages other than English (French, German, Spanish, Latin). BHL contains texts in multiple languages. |
+| **Word Cloud** | Visualise entity frequency as a word cloud |
+| **User Accounts** | Save and load processing sessions |
+
+---
+
 ## 👏 Acknowledgements
 
 - **[Xia Cui](https://www.mmu.ac.uk/staff/profile/dr-xia-cui)** - Internship Supervisor, Senior Lecturer in Software Engineering, Manchester Metropolitan University
