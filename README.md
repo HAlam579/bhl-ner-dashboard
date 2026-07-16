@@ -123,6 +123,30 @@ Open http://localhost:8501 in your browser.
 
 ---
 
+## 🖼️ Screenshots
+
+### Dashboard Loading
+*Models load at startup with a progress spinner.*
+
+![Startup](images/startup.png)
+
+### Dashboard Input
+*Enter a BHL Page ID or paste your own text.*
+
+![Input](images/input.png)
+
+### Highlighted Text
+*Entities are colour-coded by type for easy identification.*
+
+![Highlighted Text](images/highlighted.png)
+
+### Results View
+*Entity bar chart.*
+
+![Results](images/results.png)
+
+---
+
 ## 📋 Dependencies
 
     streamlit>=1.28.0
