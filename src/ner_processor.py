@@ -21,6 +21,7 @@ from gliner import GLiNER
 #     TaxoNERD = None
 #     print("⚠️ TaxoNERD not available. Install with: py -3.10 -m pip install taxonerd")
 
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="gliner")
 
@@ -586,6 +587,79 @@ class NERProcessor:
 
 
 
+    def _merge_overlapping_entities(self, entities):
+        """
+        Merge overlapping entities, keeping the best one.
+        Part of the hybrid rule.
+        
+        Priority:
+        1. Domain-specific models (GLiNER2, GLiNER, GNfinder) > spaCy
+        2. More specific labels (SPECIES > LOCATION > PERSON > etc.)
+        3. Longer text (more complete entity)
+        """
+        if not entities:
+            return entities
+        
+        # Source priority
+        SOURCE_PRIORITY = {
+            "GLiNER2": 5,
+            "GLiNER": 4,
+            "GNfinder": 4,
+            "spaCy": 1,
+        }
+        
+        # Label priority: species and habitat are most important
+        LABEL_PRIORITY = {
+            "SPECIES": 10,
+            "HABITAT": 9,
+            "ORGANISM": 8,
+            "LOCATION": 7,
+            "PERSON": 6,
+            "DATE": 5,
+            "ORGANIZATION": 4,
+        }
+        
+        def get_priority(entity):
+            """Calculate priority score for sorting."""
+            return (
+                SOURCE_PRIORITY.get(entity.get("source", ""), 0),
+                LABEL_PRIORITY.get(entity.get("label", ""), 0),
+                len(entity.get("text", ""))
+            )
+        
+        # Sort by priority (highest first)
+        sorted_entities = sorted(entities, key=get_priority, reverse=True)
+        
+        kept = []
+        for entity in sorted_entities:
+            start = entity["start"]
+            end = entity["end"]
+            is_inside = False
+            
+            for kept_entity in kept:
+                kept_start = kept_entity["start"]
+                kept_end = kept_entity["end"]
+                
+                # If entity is fully inside a kept entity, skip it
+                if start >= kept_start and end <= kept_end:
+                    is_inside = True
+                    break
+                
+                # If entity overlaps but extends beyond, keep the better one
+                if (start < kept_start and end > kept_start) or (start < kept_end and end > kept_end):
+                    if get_priority(entity) > get_priority(kept_entity):
+                        kept.remove(kept_entity)
+                        kept.append(entity)
+                    is_inside = True
+                    break
+            
+            if not is_inside:
+                kept.append(entity)
+        
+        return kept
+    
+    
+    
     def process_text(self, text, method="hybrid"):
         """
         Process text with selected NER method.
@@ -704,6 +778,8 @@ class NERProcessor:
                 gliner2_entities = self.process_gliner2(text)
                 print(f"  GLiNER2 found {len(gliner2_entities)} entities")
                 all_entities = spacy_entities + gliner2_entities
+
+            all_entities = self._merge_overlapping_entities(all_entities)
 
             # Deduplicate
             seen = set()

@@ -51,16 +51,19 @@ This dashboard applies **Named Entity Recognition (NER)** to texts from the **Bi
 
 > **Default Method**: The dashboard uses **"Hybrid (spaCy + GLiNER2)"** by default. This provides a good balance of speed and accuracy for general use.
 
-
 ### How Hybrid Works
 
-1. Each model processes the text independently
-2. All entities are collected into a single list
-3. **Deduplication**: Entities are deduplicated using:
+1. **Independent Processing**: Each model processes the text independently
+2. **Collection**: All entities are collected into a single list
+3. **Overlap Merging**: Overlapping entities are merged, keeping the best one:
+   - Domain-specific models (GLiNER2, GLiNER, GNfinder) take priority over spaCy
+   - More specific labels (SPECIES > LOCATION > PERSON) take priority
+   - Longer text (more complete entity) is preferred
+4. **Deduplication**: Entities are deduplicated using:
    - Key = `lowercase_text + "|" + label`
    - Example: `"ailuropoda melanoleuca|SPECIES"`
-4. The `source` attribute tracks which model found each entity
-5. This maximises coverage while avoiding duplicates
+5. The `source` attribute tracks which model found each entity
+6. This maximises coverage while avoiding duplicates and partial matches
 
 ---
 
