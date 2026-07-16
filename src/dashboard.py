@@ -316,7 +316,7 @@ with st.expander("📖 How to Use This Dashboard", expanded=False):
     ### 💡 Tips
     - **Best overall**: Use "Hybrid (spaCy + GLiNER + GNfinder)" for maximum coverage
     - **Real confidence scores**: GLiNER and GNfinder provide real confidence scores
-    - **First request may be slow**: Models load on first use, subsequent requests are faster
+    - **Models load at startup**: The first time you open the dashboard, models load with a spinner
     - **Large texts**: Processing long texts may take a few seconds
     
     ### 📊 Entity Types
