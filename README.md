@@ -2,9 +2,40 @@
 
 Named Entity Recognition for Biodiversity Heritage Library texts.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/Python-3.13%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)
 ![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)
+
+---
+
+## 📑 Table of Contents
+
+- [🌿 BHL NER Dashboard](#-bhl-ner-dashboard)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [📌 Overview](#-overview)
+  - [✨ Features](#-features)
+  - [🧠 Extraction Methods](#-extraction-methods)
+    - [How Hybrid Works](#how-hybrid-works)
+  - [📦 Setup](#-setup)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+  - [📖 Usage](#-usage)
+    - [Fetch from BHL](#fetch-from-bhl)
+    - [Paste Text](#paste-text)
+    - [Results](#results)
+  - [🖼️ Screenshots](#️-screenshots)
+    - [Dashboard Loading](#dashboard-loading)
+    - [Dashboard Input](#dashboard-input)
+    - [Highlighted Text](#highlighted-text)
+    - [Results View](#results-view)
+  - [📋 Dependencies](#-dependencies)
+  - [🧪 Testing](#-testing)
+  - [🔌 Plugin System](#-plugin-system)
+    - [How to Add a New Model](#how-to-add-a-new-model)
+    - [How It Works](#how-it-works)
+  - [🔮 Future Work](#-future-work)
+  - [👩‍💻 Developer](#-developer)
+  - [👏 Acknowledgements](#-acknowledgements)
 
 ---
 
@@ -76,7 +107,7 @@ This dashboard applies **Named Entity Recognition (NER)** to texts from the **Bi
 
 Clone the repository:
 
-    git clone https://github.com/[your-username]/bhl-ner-dashboard.git
+    git clone https://github.com/HAlam579/bhl-ner-dashboard.git
     cd bhl-ner-dashboard
 
 Install dependencies:
@@ -234,6 +265,17 @@ While the dashboard is fully functional, several enhancements could further impr
 | **Multilingual Support** | Extend NER models to support languages other than English (French, German, Spanish, Latin). BHL contains texts in multiple languages. |
 | **Word Cloud** | Visualise entity frequency as a word cloud |
 | **User Accounts** | Save and load processing sessions |
+
+---
+
+## 👩‍💻 Developer
+
+**Humairah Alam**  
+BSc Software Engineering  
+Manchester Metropolitan University  
+
+[![GitHub](https://img.shields.io/badge/GitHub-HAlam579-181717?style=flat&logo=github)](https://github.com/HAlam579)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-humairahalam-0A66C2?style=flat&logo=linkedin)](https://linkedin.com/in/humairahalam)
 
 ---
 
